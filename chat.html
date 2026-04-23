@@ -150,10 +150,13 @@ if (Notification.permission !== "granted") {
 // DM sound
 const dmSound = new Audio("dm.mp3");
 
-// Unlock audio on first click
+// FIXED: Unlock audio on first click (NO SOUND)
 document.addEventListener("click", () => {
-  dmSound.play().catch(() => {});
-});
+  dmSound.play().then(() => {
+    dmSound.pause();
+    dmSound.currentTime = 0;
+  }).catch(() => {});
+}, { once: true });
 
 // Popup function
 function showDMPopup() {
