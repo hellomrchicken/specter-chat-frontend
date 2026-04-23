@@ -145,6 +145,11 @@ document.title = "Specter Chat - " + user;
 // DM sound
 const dmSound = new Audio("dm.mp3");
 
+// Unlock audio on first click
+document.addEventListener("click", () => {
+  dmSound.play().catch(() => {});
+});
+
 // Popup function
 function showDMPopup() {
   const popup = document.getElementById("dmPopup");
