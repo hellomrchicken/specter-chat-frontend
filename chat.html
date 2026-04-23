@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html>
 <head>
   <title>Specter Chat</title>
@@ -13,129 +12,121 @@
       height: 100vh;
     }
 
-```
-#sidebar {
-  width: 250px;
-  background: #1a1a1a;
-  padding: 15px;
-  border-right: 2px solid #333;
-  display: flex;
-  flex-direction: column;
-}
+    #sidebar {
+      width: 250px;
+      background: #1a1a1a;
+      padding: 15px;
+      border-right: 2px solid #333;
+      display: flex;
+      flex-direction: column;
+    }
 
-#userList p {
-  padding: 5px;
-  cursor: pointer;
-  border-radius: 5px;
-}
+    #userList p {
+      padding: 5px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
 
-#userList p:hover {
-  background: #333;
-}
+    #userList p:hover {
+      background: #333;
+    }
 
-#main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
 
-#messages, #dmMessages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 15px;
-}
+    #messages, #dmMessages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+    }
 
-#inputArea {
-  display: flex;
-  padding: 10px;
-  background: #222;
-}
+    #inputArea {
+      display: flex;
+      padding: 10px;
+      background: #222;
+    }
 
-#inputArea input {
-  flex: 1;
-  padding: 10px;
-  border: none;
-  border-radius: 5px;
-  margin-right: 10px;
-}
+    #inputArea input {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      margin-right: 10px;
+    }
 
-#inputArea button {
-  padding: 10px 15px;
-  background: #4caf50;
-  border: none;
-  border-radius: 5px;
-  color: white;
-  cursor: pointer;
-}
+    #inputArea button {
+      padding: 10px 15px;
+      background: #4caf50;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
 
-#dmPopup {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background: #ff00ff;
-  padding: 15px 20px;
-  border-radius: 10px;
-  display: none;
-  color: white;
-  font-weight: bold;
-  box-shadow: 0 0 15px #ff00ff;
-}
+    #dmPopup {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #ff00ff;
+      padding: 15px 20px;
+      border-radius: 10px;
+      display: none;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 0 15px #ff00ff;
+    }
 
-.msg.me {
-  text-align: right;
-  color: #4caf50;
-}
-```
-
+    .msg.me {
+      text-align: right;
+      color: #4caf50;
+    }
   </style>
 </head>
+
 <body>
 
-  <div id="sidebar">
-    <h2>Users</h2>
-    <div id="userList"></div>
+<div id="sidebar">
+  <h2>Users</h2>
+  <div id="userList"></div>
 
-```
-<hr>
+  <hr>
 
-<button onclick="switchMode('public')">Public Chat</button>
-<button onclick="switchMode('dm')">DMs</button>
-<button onclick="logout()">Logout</button>
-```
-
-  </div>
-
-  <div id="main">
-    <div id="messages"></div>
-    <div id="dmMessages" style="display:none;"></div>
-
-```
-<div id="inputArea">
-  <input id="msg" placeholder="Type a message...">
-  <button onclick="send()">Send</button>
+  <button onclick="switchMode('public')">Public Chat</button>
+  <button onclick="switchMode('dm')">DMs</button>
+  <button onclick="logout()">Logout</button>
 </div>
-```
 
+<div id="main">
+  <div id="messages"></div>
+  <div id="dmMessages" style="display:none;"></div>
+
+  <div id="inputArea">
+    <input id="msg" placeholder="Type a message...">
+    <button onclick="send()">Send</button>
   </div>
+</div>
 
-  <div id="dmPopup">New DM!</div>
+<div id="dmPopup">New DM!</div>
 
 <script>
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 const user = localStorage.getItem("user");
 
-let mode = "public";
-let dmTarget = null;
-
-// 🔥 Timestamp-based DM tracking
-let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
-let initialized = false;
-
 if (!user) window.location = "index.html";
 
 document.title = "Specter Chat - " + user;
 
-// ---------------- SECURITY ----------------
+let mode = "public";
+let dmTarget = null;
+
+// 🔥 FIX: use timestamp tracking
+let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
+let initialized = false;
+
+// ---------------- SAFE TEXT ----------------
 function escapeHTML(str) {
   return str.replace(/[&<>"']/g, c => ({
     '&': '&amp;',
@@ -146,23 +137,7 @@ function escapeHTML(str) {
   }[c]));
 }
 
-// ---------------- NOTIFICATIONS ----------------
-if (Notification.permission !== "granted") {
-  Notification.requestPermission();
-}
-
-const dmSound = new Audio("dm.mp3");
-
-// unlock audio
-document.addEventListener("click", () => {
-  dmSound.muted = true;
-  dmSound.play().then(() => {
-    dmSound.pause();
-    dmSound.currentTime = 0;
-    dmSound.muted = false;
-  });
-}, { once: true });
-
+// ---------------- DM POPUP ----------------
 function showDMPopup() {
   const popup = document.getElementById("dmPopup");
   popup.style.display = "block";
@@ -173,6 +148,7 @@ function showDMPopup() {
 async function loadUsers() {
   const res = await fetch(API + "/messages");
   const msgs = await res.json();
+
   const users = [...new Set(msgs.map(m => m.username))];
 
   document.getElementById("userList").innerHTML =
@@ -187,17 +163,15 @@ function switchMode(m) {
   if (m === "public") dmTarget = null;
 }
 
-// ---------------- DM ----------------
+// ---------------- OPEN DM ----------------
 function openDM(target) {
-  mode = "dm";
   dmTarget = target;
   switchMode("dm");
+  loadDMs();
 
-  // mark messages as seen when opening DM
+  // mark as seen so no fake notification
   lastSeenDM = Date.now();
   localStorage.setItem("lastSeenDM", lastSeenDM);
-
-  loadDMs();
 }
 
 // ---------------- SEND ----------------
@@ -225,12 +199,12 @@ async function send() {
   loadDMs();
 }
 
-// ENTER TO SEND
+// 🔥 ENTER TO SEND
 document.getElementById("msg").addEventListener("keypress", e => {
   if (e.key === "Enter") send();
 });
 
-// ---------------- LOAD DMs ----------------
+// ---------------- LOAD DMS (FIXED) ----------------
 async function loadDMs() {
   const res = await fetch(API + "/dm/get", {
     method: "POST",
@@ -248,8 +222,8 @@ async function loadDMs() {
     const newest = incoming[incoming.length - 1];
     const newestTime = new Date(newest.time).getTime();
 
+    // 🔥 ONLY trigger real new messages
     if (initialized && newestTime > lastSeenDM && mode !== "dm") {
-      dmSound.play();
       showDMPopup();
 
       if (Notification.permission === "granted") {
@@ -265,12 +239,13 @@ async function loadDMs() {
 
   if (!dmTarget) return;
 
-  const filtered = dms.filter(
-    m => (m.from === user && m.to === dmTarget) ||
-         (m.from === dmTarget && m.to === user)
+  const filtered = dms.filter(m =>
+    (m.from === user && m.to === dmTarget) ||
+    (m.from === dmTarget && m.to === user)
   );
 
   const box = document.getElementById("dmMessages");
+
   box.innerHTML = filtered.map(m => `
     <p class="msg ${m.from === user ? 'me' : ''}">
       <b>${escapeHTML(m.from)} → ${escapeHTML(m.to)}:</b> ${escapeHTML(m.text)}
@@ -280,7 +255,7 @@ async function loadDMs() {
   box.scrollTop = box.scrollHeight;
 }
 
-// ---------------- PUBLIC ----------------
+// ---------------- LOAD PUBLIC ----------------
 async function loadMessages() {
   if (mode !== "public") return;
 
@@ -288,6 +263,7 @@ async function loadMessages() {
   const msgs = await res.json();
 
   const box = document.getElementById("messages");
+
   box.innerHTML = msgs.map(m => `
     <p class="msg ${m.username === user ? 'me' : ''}">
       <b>${escapeHTML(m.username)}:</b> ${escapeHTML(m.text)}
@@ -311,6 +287,7 @@ setInterval(() => {
   loadUsers();
 }, 2000);
 
+// INIT
 loadMessages();
 loadUsers();
 </script>
