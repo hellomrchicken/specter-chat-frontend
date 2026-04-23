@@ -23,7 +23,11 @@ async function signup() {
     document.getElementById("status").innerText = "Server error";
   }
 }
-
+function testSound() {
+  dmSound.play()
+    .then(() => console.log("sound works"))
+    .catch(err => console.error("sound failed:", err));
+}
 // ---------------- LOGIN ----------------
 async function login() {
   const username = document.getElementById("username").value;
