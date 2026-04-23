@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Specter Chat – Login</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #111;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    #box {
+      background: #1a1a1a;
+      padding: 25px;
+      border-radius: 10px;
+      width: 300px;
+      text-align: center;
+      border: 2px solid #333;
+    }
+
+    input {
+      width: 90%;
+      padding: 10px;
+      margin: 10px 0;
+      border: none;
+      border-radius: 5px;
+    }
+
+    button {
+      width: 95%;
+      padding: 10px;
+      margin-top: 10px;
+      background: #4caf50;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="box">
+    <h2>Specter Chat</h2>
+
+    <input id="user" placeholder="Username">
+    <input id="pass" type="password" placeholder="Password">
+
+    <button onclick="login()">Login</button>
+    <button onclick="signup()">Sign Up</button>
+  </div>
+
+  <script src="script.js"></script>
+
+</body>
+</html>
