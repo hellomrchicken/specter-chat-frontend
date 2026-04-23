@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -89,6 +88,19 @@
       color: #ff66ff;
     }
 
+    /* DM Popup */
+    #dmPopup {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #ff00ff;
+      padding: 15px 20px;
+      border-radius: 10px;
+      display: none;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 0 15px #ff00ff;
+    }
   </style>
 </head>
 <body>
@@ -101,7 +113,7 @@
     <hr>
 
     <button onclick="switchMode('public')">Public Chat</button>
-    <button onclick="switchMode('dm')">DMs</button>
+    <button onclick="switchMode('dm')" id="dmButton">DMs</button>
   </div>
 
   <!-- MAIN CHAT AREA -->
@@ -115,6 +127,9 @@
     </div>
   </div>
 
+  <!-- DM POPUP -->
+  <div id="dmPopup">New DM!</div>
+
 <script>
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 const user = localStorage.getItem("user");
@@ -126,6 +141,19 @@ if (!user) {
 }
 
 document.title = "Specter Chat - " + user;
+
+// DM sound
+const dmSound = new Audio("dm.mp3");
+
+// Popup function
+function showDMPopup() {
+  const popup = document.getElementById("dmPopup");
+  popup.style.display = "block";
+
+  setTimeout(() => {
+    popup.style.display = "none";
+  }, 3000);
+}
 
 // Load users list
 async function loadUsers() {
@@ -149,6 +177,7 @@ function switchMode(m) {
   } else {
     document.getElementById("messages").style.display = "none";
     document.getElementById("dmMessages").style.display = "block";
+    document.getElementById("dmButton").classList.remove("dm-alert");
   }
 }
 
@@ -187,6 +216,43 @@ async function send() {
   loadDMs();
 }
 
+let lastDMCount = 0;
+
+// Load DM messages
+async function loadDMs() {
+  const res = await fetch(API + "/dm/get", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: user })
+  });
+
+  const dms = await res.json();
+
+  const incoming = dms.filter(m => m.to === user);
+
+  // New DM alert
+  if (incoming.length > lastDMCount && mode !== "dm") {
+    dmSound.play();
+    showDMPopup();
+  }
+
+  lastDMCount = incoming.length;
+
+  if (!dmTarget) return;
+
+  const filtered = dms.filter(
+    m => (m.from === user && m.to === dmTarget) ||
+         (m.from === dmTarget && m.to === user)
+  );
+
+  document.getElementById("dmMessages").innerHTML =
+    filtered.map(m => `
+      <p class="msg ${m.from === user ? 'me' : ''}">
+        <b class="dm-tag">${m.from} → ${m.to}:</b> ${m.text}
+      </p>
+    `).join("");
+}
+
 // Load public messages
 async function loadMessages() {
   if (mode !== "public") return;
@@ -198,31 +264,6 @@ async function loadMessages() {
     msgs.map(m => `
       <p class="msg ${m.username === user ? 'me' : ''}">
         <b>${m.username}:</b> ${m.text}
-      </p>
-    `).join("");
-}
-
-// Load DM messages
-async function loadDMs() {
-  if (!dmTarget) return;
-
-  const res = await fetch(API + "/dm/get", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: user })
-  });
-
-  const dms = await res.json();
-
-  const filtered = dms.filter(
-    m => (m.from === user && m.to === dmTarget) ||
-         (m.from === dmTarget && m.to === user)
-  );
-
-  document.getElementById("dmMessages").innerHTML =
-    filtered.map(m => `
-      <p class="msg ${m.from === user ? 'me' : ''}">
-        <b class="dm-tag">${m.from} → ${m.to}:</b> ${m.text}
       </p>
     `).join("");
 }
