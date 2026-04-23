@@ -127,7 +127,7 @@ const user = localStorage.getItem("user");
 let mode = "public";
 let dmTarget = null;
 
-// 🔥 DM tracking fix
+// 🔥 Timestamp-based DM tracking
 let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
 let initialized = false;
 
@@ -192,6 +192,11 @@ function openDM(target) {
   mode = "dm";
   dmTarget = target;
   switchMode("dm");
+
+  // mark messages as seen when opening DM
+  lastSeenDM = Date.now();
+  localStorage.setItem("lastSeenDM", lastSeenDM);
+
   loadDMs();
 }
 
@@ -220,7 +225,7 @@ async function send() {
   loadDMs();
 }
 
-// 🔥 ENTER TO SEND
+// ENTER TO SEND
 document.getElementById("msg").addEventListener("keypress", e => {
   if (e.key === "Enter") send();
 });
@@ -236,14 +241,14 @@ async function loadDMs() {
   const dms = await res.json();
 
   const incoming = dms
-    .filter(m => m.to === user)
-    .sort((a, b) => (a.id || 0) - (b.id || 0));
+    .filter(m => m.to === user && m.from !== user)
+    .sort((a, b) => new Date(a.time) - new Date(b.time));
 
   if (incoming.length > 0) {
     const newest = incoming[incoming.length - 1];
-    const newestId = newest.id || 0;
+    const newestTime = new Date(newest.time).getTime();
 
-    if (initialized && newestId > lastSeenDM && mode !== "dm") {
+    if (initialized && newestTime > lastSeenDM && mode !== "dm") {
       dmSound.play();
       showDMPopup();
 
@@ -252,7 +257,7 @@ async function loadDMs() {
       }
     }
 
-    lastSeenDM = newestId;
+    lastSeenDM = newestTime;
     localStorage.setItem("lastSeenDM", lastSeenDM);
   }
 
