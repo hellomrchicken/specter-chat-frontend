@@ -122,11 +122,28 @@ document.title = "Specter Chat - " + user;
 let mode = "public";
 let dmTarget = null;
 
-// 🔥 FIX: use timestamp tracking
+// 🔥 DM tracking
 let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
 let initialized = false;
 
-// ---------------- SAFE TEXT ----------------
+// 🔊 SOUND FIX
+const dmSound = new Audio("dm.mp3");
+dmSound.volume = 1.0;
+
+let audioUnlocked = false;
+
+// unlock audio on first click
+document.addEventListener("click", () => {
+  if (audioUnlocked) return;
+
+  dmSound.play().then(() => {
+    dmSound.pause();
+    dmSound.currentTime = 0;
+    audioUnlocked = true;
+  }).catch(() => {});
+}, { once: true });
+
+// ---------------- SECURITY ----------------
 function escapeHTML(str) {
   return str.replace(/[&<>"']/g, c => ({
     '&': '&amp;',
@@ -167,11 +184,11 @@ function switchMode(m) {
 function openDM(target) {
   dmTarget = target;
   switchMode("dm");
-  loadDMs();
 
-  // mark as seen so no fake notification
   lastSeenDM = Date.now();
   localStorage.setItem("lastSeenDM", lastSeenDM);
+
+  loadDMs();
 }
 
 // ---------------- SEND ----------------
@@ -199,12 +216,12 @@ async function send() {
   loadDMs();
 }
 
-// 🔥 ENTER TO SEND
+// ENTER TO SEND
 document.getElementById("msg").addEventListener("keypress", e => {
   if (e.key === "Enter") send();
 });
 
-// ---------------- LOAD DMS (FIXED) ----------------
+// ---------------- LOAD DMS ----------------
 async function loadDMs() {
   const res = await fetch(API + "/dm/get", {
     method: "POST",
@@ -222,9 +239,13 @@ async function loadDMs() {
     const newest = incoming[incoming.length - 1];
     const newestTime = new Date(newest.time).getTime();
 
-    // 🔥 ONLY trigger real new messages
     if (initialized && newestTime > lastSeenDM && mode !== "dm") {
       showDMPopup();
+
+      if (audioUnlocked) {
+        dmSound.currentTime = 0;
+        dmSound.play().catch(() => {});
+      }
 
       if (Notification.permission === "granted") {
         new Notification("New DM!", { body: newest.text });
@@ -287,7 +308,6 @@ setInterval(() => {
   loadUsers();
 }, 2000);
 
-// INIT
 loadMessages();
 loadUsers();
 </script>
