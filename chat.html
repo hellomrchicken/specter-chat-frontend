@@ -12,7 +12,6 @@
       height: 100vh;
     }
 
-    /* Sidebar */
     #sidebar {
       width: 250px;
       background: #1a1a1a;
@@ -20,10 +19,6 @@
       border-right: 2px solid #333;
       display: flex;
       flex-direction: column;
-    }
-
-    #sidebar h2 {
-      margin-top: 0;
     }
 
     #userList p {
@@ -36,7 +31,6 @@
       background: #333;
     }
 
-    /* Main chat area */
     #main {
       flex: 1;
       display: flex;
@@ -72,23 +66,6 @@
       cursor: pointer;
     }
 
-    #inputArea button:hover {
-      background: #45a049;
-    }
-
-    .msg {
-      margin-bottom: 10px;
-    }
-
-    .me {
-      color: #4caf50;
-    }
-
-    .dm-tag {
-      color: #ff66ff;
-    }
-
-    /* DM Popup */
     #dmPopup {
       position: fixed;
       bottom: 20px;
@@ -105,7 +82,6 @@
 </head>
 <body>
 
-  <!-- SIDEBAR -->
   <div id="sidebar">
     <h2>Users</h2>
     <div id="userList"></div>
@@ -116,7 +92,6 @@
     <button onclick="switchMode('dm')" id="dmButton">DMs</button>
   </div>
 
-  <!-- MAIN CHAT AREA -->
   <div id="main">
     <div id="messages"></div>
     <div id="dmMessages" style="display:none;"></div>
@@ -127,7 +102,6 @@
     </div>
   </div>
 
-  <!-- DM POPUP -->
   <div id="dmPopup">New DM!</div>
 
 <script>
@@ -136,13 +110,11 @@ const user = localStorage.getItem("user");
 let mode = "public";
 let dmTarget = null;
 
-if (!user) {
-  window.location = "index.html";
-}
+if (!user) window.location = "index.html";
 
 document.title = "Specter Chat - " + user;
 
-// Ask for desktop notification permission
+// Notification permission
 if (Notification.permission !== "granted") {
   Notification.requestPermission();
 }
@@ -150,62 +122,49 @@ if (Notification.permission !== "granted") {
 // DM sound
 const dmSound = new Audio("dm.mp3");
 
-// FIXED: Unlock audio on first click (NO SOUND)
+// FIXED: Unlock audio silently
 document.addEventListener("click", () => {
+  dmSound.muted = true;
   dmSound.play().then(() => {
     dmSound.pause();
     dmSound.currentTime = 0;
-  }).catch(() => {});
+    dmSound.muted = false;
+  });
 }, { once: true });
 
-// Popup function
+// Popup
 function showDMPopup() {
   const popup = document.getElementById("dmPopup");
   popup.style.display = "block";
-
-  setTimeout(() => {
-    popup.style.display = "none";
-  }, 3000);
+  setTimeout(() => popup.style.display = "none", 3000);
 }
 
-// Load users list
+// Load users
 async function loadUsers() {
   const res = await fetch(API + "/messages");
   const msgs = await res.json();
-
   const users = [...new Set(msgs.map(m => m.username))];
-
   document.getElementById("userList").innerHTML =
     users.map(u => `<p onclick="openDM('${u}')">${u}</p>`).join("");
 }
 
-// Switch between public chat and DM mode
+// Switch mode
 function switchMode(m) {
   mode = m;
-
-  if (m === "public") {
-    document.getElementById("messages").style.display = "block";
-    document.getElementById("dmMessages").style.display = "none";
-    dmTarget = null;
-  } else {
-    document.getElementById("messages").style.display = "none";
-    document.getElementById("dmMessages").style.display = "block";
-    document.getElementById("dmButton").classList.remove("dm-alert");
-  }
+  document.getElementById("messages").style.display = m === "public" ? "block" : "none";
+  document.getElementById("dmMessages").style.display = m === "dm" ? "block" : "none";
+  if (m === "public") dmTarget = null;
 }
 
-// Open a DM conversation
+// Open DM
 function openDM(target) {
   mode = "dm";
   dmTarget = target;
-
-  document.getElementById("messages").style.display = "none";
-  document.getElementById("dmMessages").style.display = "block";
-
+  switchMode("dm");
   loadDMs();
 }
 
-// Send message (public or DM)
+// Send message
 async function send() {
   const text = document.getElementById("msg").value;
   if (!text) return;
@@ -216,7 +175,7 @@ async function send() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: user, text })
     });
-  } else if (mode === "dm" && dmTarget) {
+  } else {
     await fetch(API + "/dm/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -231,7 +190,7 @@ async function send() {
 
 let lastDMCount = 0;
 
-// Load DM messages
+// Load DMs
 async function loadDMs() {
   const res = await fetch(API + "/dm/get", {
     method: "POST",
@@ -240,19 +199,14 @@ async function loadDMs() {
   });
 
   const dms = await res.json();
-
   const incoming = dms.filter(m => m.to === user);
 
   // New DM alert
   if (incoming.length > lastDMCount && mode !== "dm") {
     dmSound.play();
     showDMPopup();
-
-    // Desktop notification
     if (Notification.permission === "granted") {
-      new Notification("New DM!", {
-        body: "You got a message",
-      });
+      new Notification("New DM!", { body: "You got a message" });
     }
   }
 
@@ -276,10 +230,8 @@ async function loadDMs() {
 // Load public messages
 async function loadMessages() {
   if (mode !== "public") return;
-
   const res = await fetch(API + "/messages");
   const msgs = await res.json();
-
   document.getElementById("messages").innerHTML =
     msgs.map(m => `
       <p class="msg ${m.username === user ? 'me' : ''}">
