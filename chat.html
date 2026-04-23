@@ -142,6 +142,11 @@ if (!user) {
 
 document.title = "Specter Chat - " + user;
 
+// Ask for desktop notification permission
+if (Notification.permission !== "granted") {
+  Notification.requestPermission();
+}
+
 // DM sound
 const dmSound = new Audio("dm.mp3");
 
@@ -239,6 +244,13 @@ async function loadDMs() {
   if (incoming.length > lastDMCount && mode !== "dm") {
     dmSound.play();
     showDMPopup();
+
+    // Desktop notification
+    if (Notification.permission === "granted") {
+      new Notification("New DM!", {
+        body: "You got a message",
+      });
+    }
   }
 
   lastDMCount = incoming.length;
