@@ -241,14 +241,57 @@ async function loadDMs() {
     .filter(m => m.to === user && m.from !== user)
     .sort((a, b) => new Date(a.time) - new Date(b.time));
 
-  const favicon = document.getElementById("favicon");
-
   const latest = incoming[incoming.length - 1];
   const newestTime = latest ? new Date(latest.time).getTime() : 0;
 
-  const hasNewDM =
-    initialized &&
-    newestTime > lastSeenDM;
+  const lastSeen = Number(localStorage.getItem("lastSeenDM")) || 0;
+
+  const hasNewDM = newestTime > lastSeen;
+
+  // 🔥 FAVICON (FIXED)
+  const favicon = document.getElementById("favicon");
+
+  if (hasNewDM && mode !== "dm") {
+    favicon.href = "specter_logo_alert.png";
+  } else {
+    favicon.href = "specter_logo_normal.png";
+  }
+
+  // 🔊 ALERT + SOUND (FIXED)
+  if (hasNewDM && mode !== "dm") {
+    showDMPopup();
+
+    if (audioUnlocked) {
+      dmSound.currentTime = 0;
+      dmSound.play().catch(() => {});
+    }
+
+    if (Notification.permission === "granted") {
+      new Notification("New DM!", { body: latest.text });
+    }
+
+    localStorage.setItem("lastSeenDM", newestTime);
+  }
+
+  // ❌ REMOVE initialized completely (no longer needed)
+
+  if (!dmTarget) return;
+
+  const filtered = dms.filter(m =>
+    (m.from === user && m.to === dmTarget) ||
+    (m.from === dmTarget && m.to === user)
+  );
+
+  const box = document.getElementById("dmMessages");
+
+  box.innerHTML = filtered.map(m => `
+    <p class="msg ${m.from === user ? 'me' : ''}">
+      <b>${escapeHTML(m.from)} → ${escapeHTML(m.to)}:</b> ${escapeHTML(m.text)}
+    </p>
+  `).join("");
+
+  box.scrollTop = box.scrollHeight;
+}
 
   // favicon
   favicon.href = (hasNewDM && mode !== "dm")
