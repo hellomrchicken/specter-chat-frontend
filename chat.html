@@ -2,6 +2,10 @@
 <html>
 <head>
   <title>Specter Chat</title>
+
+  <!-- FAVICON SWITCH -->
+  <link id="favicon" rel="icon" type="image/png" href="specter_logo_normal.png">
+
   <style>
     body {
       font-family: Arial;
@@ -122,17 +126,17 @@ document.title = "Specter Chat - " + user;
 let mode = "public";
 let dmTarget = null;
 
-// 🔥 DM tracking
+// DM tracking
 let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
 let initialized = false;
 
-// 🔊 SOUND FIX
+// SOUND
 const dmSound = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 dmSound.volume = 1.0;
 
 let audioUnlocked = false;
 
-// unlock audio on first click
+// Unlock audio
 document.addEventListener("click", () => {
   if (audioUnlocked) return;
 
@@ -143,7 +147,7 @@ document.addEventListener("click", () => {
   }).catch(() => {});
 }, { once: true });
 
-// ---------------- SECURITY ----------------
+// Escape HTML
 function escapeHTML(str) {
   return str.replace(/[&<>"']/g, c => ({
     '&': '&amp;',
@@ -154,14 +158,14 @@ function escapeHTML(str) {
   }[c]));
 }
 
-// ---------------- DM POPUP ----------------
+// Popup
 function showDMPopup() {
   const popup = document.getElementById("dmPopup");
   popup.style.display = "block";
   setTimeout(() => popup.style.display = "none", 3000);
 }
 
-// ---------------- USERS ----------------
+// Load users
 async function loadUsers() {
   const res = await fetch(API + "/messages");
   const msgs = await res.json();
@@ -172,7 +176,7 @@ async function loadUsers() {
     users.map(u => `<p onclick="openDM('${u}')">${escapeHTML(u)}</p>`).join("");
 }
 
-// ---------------- MODE ----------------
+// Switch mode
 function switchMode(m) {
   mode = m;
   document.getElementById("messages").style.display = m === "public" ? "block" : "none";
@@ -180,7 +184,7 @@ function switchMode(m) {
   if (m === "public") dmTarget = null;
 }
 
-// ---------------- OPEN DM ----------------
+// Open DM
 function openDM(target) {
   dmTarget = target;
   switchMode("dm");
@@ -191,7 +195,7 @@ function openDM(target) {
   loadDMs();
 }
 
-// ---------------- SEND ----------------
+// Send message
 async function send() {
   const input = document.getElementById("msg");
   const text = input.value;
@@ -216,12 +220,12 @@ async function send() {
   loadDMs();
 }
 
-// ENTER TO SEND
+// Enter to send
 document.getElementById("msg").addEventListener("keypress", e => {
   if (e.key === "Enter") send();
 });
 
-// ---------------- LOAD DMS ----------------
+// Load DMs
 async function loadDMs() {
   const res = await fetch(API + "/dm/get", {
     method: "POST",
@@ -235,6 +239,16 @@ async function loadDMs() {
     .filter(m => m.to === user && m.from !== user)
     .sort((a, b) => new Date(a.time) - new Date(b.time));
 
+  // ----- FAVICON SWITCH -----
+  const favicon = document.getElementById("favicon");
+
+  if (incoming.length > 0 && mode !== "dm") {
+    favicon.href = "specter_logo_alert.png";   // pic 2
+  } else {
+    favicon.href = "specter_logo_normal.png";  // pic 1
+  }
+
+  // DM alert logic
   if (incoming.length > 0) {
     const newest = incoming[incoming.length - 1];
     const newestTime = new Date(newest.time).getTime();
@@ -276,7 +290,7 @@ async function loadDMs() {
   box.scrollTop = box.scrollHeight;
 }
 
-// ---------------- LOAD PUBLIC ----------------
+// Load public messages
 async function loadMessages() {
   if (mode !== "public") return;
 
@@ -294,14 +308,14 @@ async function loadMessages() {
   box.scrollTop = box.scrollHeight;
 }
 
-// ---------------- LOGOUT ----------------
+// Logout
 function logout() {
   localStorage.removeItem("user");
   localStorage.removeItem("lastSeenDM");
   window.location = "index.html";
 }
 
-// ---------------- LOOP ----------------
+// Loop
 setInterval(() => {
   loadMessages();
   loadDMs();
