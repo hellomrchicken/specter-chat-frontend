@@ -137,15 +137,20 @@ dmSound.volume = 1.0;
 let audioUnlocked = false;
 
 // Unlock audio
-document.addEventListener("click", () => {
+document.addEventListener("click", async () => {
   if (audioUnlocked) return;
 
-  dmSound.play().then(() => {
-    dmSound.pause();
-    dmSound.currentTime = 0;
-    audioUnlocked = true;
-  }).catch(() => {});
-}, { once: true });
+  try {
+    await dmSound.play();
+  } catch (e) {
+    // ignore autoplay errors
+  }
+
+  dmSound.pause();
+  dmSound.currentTime = 0;
+  audioUnlocked = true;
+});
+
 
 // Escape HTML
 function escapeHTML(str) {
