@@ -3,7 +3,6 @@
 <head>
   <title>Specter Chat</title>
 
-  <!-- FAVICON -->
   <link id="favicon" rel="icon" type="image/png" href="specter_logo_normal.png">
 
   <style>
@@ -129,7 +128,6 @@ let mode = "public";
 let dmTarget = null;
 
 let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
-let initialized = false;
 
 // SOUND
 const dmSound = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
@@ -137,7 +135,7 @@ dmSound.volume = 1.0;
 
 let audioUnlocked = false;
 
-// unlock audio
+// unlock audio (required by browsers)
 document.addEventListener("click", async () => {
   if (audioUnlocked) return;
 
@@ -183,6 +181,7 @@ function switchMode(m) {
   mode = m;
   document.getElementById("messages").style.display = m === "public" ? "block" : "none";
   document.getElementById("dmMessages").style.display = m === "dm" ? "block" : "none";
+
   if (m === "public") dmTarget = null;
 }
 
@@ -191,7 +190,7 @@ function openDM(target) {
   dmTarget = target;
   switchMode("dm");
 
-  lastSeenDM = 0;
+  lastSeenDM = Date.now();
   localStorage.setItem("lastSeenDM", lastSeenDM);
 
   loadDMs();
@@ -227,7 +226,7 @@ document.getElementById("msg").addEventListener("keypress", e => {
   if (e.key === "Enter") send();
 });
 
-// LOAD DMs
+// LOAD DMs (FIXED CLEAN VERSION)
 async function loadDMs() {
   const res = await fetch(API + "/dm/get", {
     method: "POST",
@@ -238,26 +237,21 @@ async function loadDMs() {
   const dms = await res.json();
 
   const incoming = dms
-    .filter(m => m.to === user && m.from !== user)
+    .filter(m => m.to === user)
     .sort((a, b) => new Date(a.time) - new Date(b.time));
 
   const latest = incoming[incoming.length - 1];
   const newestTime = latest ? new Date(latest.time).getTime() : 0;
 
-  const lastSeen = Number(localStorage.getItem("lastSeenDM")) || 0;
+  const hasNewDM = newestTime > lastSeenDM;
 
-  const hasNewDM = newestTime > lastSeen;
+  // favicon
+  document.getElementById("favicon").href =
+    (hasNewDM && mode !== "dm")
+      ? "specter_logo_alert.png"
+      : "specter_logo_normal.png";
 
-  // 🔥 FAVICON (FIXED)
-  const favicon = document.getElementById("favicon");
-
-  if (hasNewDM && mode !== "dm") {
-    favicon.href = "specter_logo_alert.png";
-  } else {
-    favicon.href = "specter_logo_normal.png";
-  }
-
-  // 🔊 ALERT + SOUND (FIXED)
+  // alert
   if (hasNewDM && mode !== "dm") {
     showDMPopup();
 
@@ -271,51 +265,8 @@ async function loadDMs() {
     }
 
     localStorage.setItem("lastSeenDM", newestTime);
-  }
-
-  // ❌ REMOVE initialized completely (no longer needed)
-
-  if (!dmTarget) return;
-
-  const filtered = dms.filter(m =>
-    (m.from === user && m.to === dmTarget) ||
-    (m.from === dmTarget && m.to === user)
-  );
-
-  const box = document.getElementById("dmMessages");
-
-  box.innerHTML = filtered.map(m => `
-    <p class="msg ${m.from === user ? 'me' : ''}">
-      <b>${escapeHTML(m.from)} → ${escapeHTML(m.to)}:</b> ${escapeHTML(m.text)}
-    </p>
-  `).join("");
-
-  box.scrollTop = box.scrollHeight;
-}
-
-  // favicon
-  favicon.href = (hasNewDM && mode !== "dm")
-    ? "specter_logo_alert.png"
-    : "specter_logo_normal.png";
-
-  // notification + sound
-  if (hasNewDM && mode !== "dm") {
-    showDMPopup();
-
-    if (audioUnlocked) {
-      dmSound.currentTime = 0;
-      dmSound.play().catch(() => {});
-    }
-
-    if (Notification.permission === "granted") {
-      new Notification("New DM!", { body: latest.text });
-    }
-
     lastSeenDM = newestTime;
-    localStorage.setItem("lastSeenDM", lastSeenDM);
   }
-
-  initialized = true;
 
   if (!dmTarget) return;
 
@@ -369,6 +320,7 @@ setInterval(() => {
 
 loadMessages();
 loadUsers();
+loadDMs();
 </script>
 
 </body>
