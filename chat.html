@@ -80,7 +80,6 @@
       display: none;
     }
 
-    /* CALL POPUP */
     #callPopup {
       position: fixed;
       bottom: 100px;
@@ -103,7 +102,6 @@
     .accept { background: green; color: white; }
     .decline { background: red; color: white; }
 
-    /* VIDEO */
     #videoCall {
       display:none;
       position:fixed;
@@ -165,14 +163,12 @@
 
 <div id="dmPopup">New DM!</div>
 
-<!-- CALL POPUP -->
 <div id="callPopup">
   <div>☎️ Incoming Call</div>
   <button class="accept" onclick="acceptCall()">📞</button>
   <button class="decline" onclick="declineCall()">❌</button>
 </div>
 
-<!-- VIDEO -->
 <div id="videoCall">
   <button id="endCall" onclick="endCall()">End</button>
   <iframe id="callFrame"></iframe>
@@ -188,11 +184,12 @@ let mode = "public";
 let dmTarget = null;
 
 let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
-let initialized = false;
+let lastCallTime = Number(localStorage.getItem("lastCallTime")) || 0;
 
+let initialized = false;
 let currentRoom = null;
 
-// sounds
+// SOUND
 const dmSound = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 const ring = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 
@@ -220,13 +217,6 @@ function escapeHTML(str) {
   }[c]));
 }
 
-// popup
-function showDMPopup() {
-  const popup = document.getElementById("dmPopup");
-  popup.style.display = "block";
-  setTimeout(() => popup.style.display = "none", 3000);
-}
-
 // USERS
 async function loadUsers() {
   const res = await fetch(API + "/messages");
@@ -245,7 +235,7 @@ function switchMode(m) {
   document.getElementById("dmMessages").style.display = m === "dm" ? "block" : "none";
 }
 
-// OPEN DM
+// DM
 function openDM(target) {
   dmTarget = target;
   switchMode("dm");
@@ -287,27 +277,35 @@ async function startCall() {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({
-      from: user,
-      to: dmTarget,
-      text: "__CALL__:" + room
+      from:user,
+      to:dmTarget,
+      text:"__CALL__:" + room
     })
   });
 
   openVideo(room);
 }
 
-// CHECK CALLS
-async function checkCalls(dms) {
-  const call = dms.find(m =>
-    m.to === user &&
-    m.text.startsWith("__CALL__:")
-  );
+// CALL CHECK
+function checkCalls(dms) {
+  const calls = dms
+    .filter(m => m.to === user && m.text.startsWith("__CALL__:"))
+    .sort((a,b)=>new Date(b.time)-new Date(a.time));
 
-  if (call) {
-    currentRoom = call.text.split(":")[1];
-    document.getElementById("callPopup").style.display = "block";
-    if (audioUnlocked) ring.play().catch(()=>{});
-  }
+  if (!calls.length) return;
+
+  const call = calls[0];
+  const time = new Date(call.time).getTime();
+
+  if (time <= lastCallTime) return;
+
+  lastCallTime = time;
+  localStorage.setItem("lastCallTime", lastCallTime);
+
+  currentRoom = call.text.split(":")[1];
+  document.getElementById("callPopup").style.display = "block";
+
+  if (audioUnlocked) ring.play().catch(()=>{});
 }
 
 // ACCEPT
@@ -335,12 +333,12 @@ function endCall() {
   document.getElementById("callFrame").src = "";
 }
 
-// LOAD DMs
+// LOAD DMS
 async function loadDMs() {
   const res = await fetch(API + "/dm/get", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ username:user })
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({username:user})
   });
 
   const dms = await res.json();
@@ -349,18 +347,17 @@ async function loadDMs() {
 
   const incoming = dms
     .filter(m => m.to === user && m.from !== user)
-    .sort((a,b)=> new Date(a.time)-new Date(b.time));
+    .sort((a,b)=>new Date(a.time)-new Date(b.time));
 
-  const latest = incoming[incoming.length - 1];
+  const latest = incoming[incoming.length-1];
   const newestTime = latest ? new Date(latest.time).getTime() : 0;
 
   const hasNewDM = initialized && newestTime > lastSeenDM;
 
   if (hasNewDM && mode !== "dm") {
-    showDMPopup();
-    if (audioUnlocked) dmSound.play().catch(()=>{});
     lastSeenDM = newestTime;
     localStorage.setItem("lastSeenDM", lastSeenDM);
+    if (audioUnlocked) dmSound.play().catch(()=>{});
   }
 
   initialized = true;
@@ -368,16 +365,17 @@ async function loadDMs() {
   if (!dmTarget) return;
 
   const filtered = dms.filter(m =>
-    (m.from === user && m.to === dmTarget) ||
-    (m.from === dmTarget && m.to === user)
+    !m.text.startsWith("__CALL__:") &&
+    (
+      (m.from === user && m.to === dmTarget) ||
+      (m.from === dmTarget && m.to === user)
+    )
   );
 
   document.getElementById("dmMessages").innerHTML =
-    filtered.map(m => `
-      <p class="msg ${m.from === user ? 'me' : ''}">
-        <b>${escapeHTML(m.from)}:</b> ${escapeHTML(m.text)}
-      </p>
-    `).join("");
+    filtered.map(m =>
+      `<p class="${m.from===user?'msg me':'msg'}"><b>${escapeHTML(m.from)}:</b> ${escapeHTML(m.text)}</p>`
+    ).join("");
 }
 
 // PUBLIC
@@ -388,26 +386,17 @@ async function loadMessages() {
   const msgs = await res.json();
 
   document.getElementById("messages").innerHTML =
-    msgs.map(m => `
-      <p class="msg ${m.username === user ? 'me' : ''}">
-        <b>${escapeHTML(m.username)}:</b> ${escapeHTML(m.text)}
-      </p>
-    `).join("");
-}
-
-// LOGOUT
-function logout() {
-  localStorage.removeItem("user");
-  localStorage.removeItem("lastSeenDM");
-  window.location = "index.html";
+    msgs.map(m =>
+      `<p class="${m.username===user?'msg me':'msg'}"><b>${escapeHTML(m.username)}:</b> ${escapeHTML(m.text)}</p>`
+    ).join("");
 }
 
 // LOOP
-setInterval(() => {
+setInterval(()=>{
   loadMessages();
   loadDMs();
   loadUsers();
-}, 2000);
+},2000);
 
 loadMessages();
 loadUsers();
