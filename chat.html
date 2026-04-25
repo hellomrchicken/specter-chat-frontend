@@ -185,6 +185,13 @@ let pc = null;
 let remoteDescSet = false;
 let iceQueue = [];
 
+// RESET CALL STATE CLEANLY
+function resetCallState() {
+  remoteDescSet = false;
+  iceQueue = [];
+}
+
+// UI
 function showOverlay() {
   document.getElementById("videoCallOverlay").style.display = "flex";
 }
@@ -194,6 +201,7 @@ function closeOverlay() {
   document.getElementById("remoteVideo").srcObject = null;
 }
 
+// MEDIA FIXED SAFELY
 async function getMediaStream() {
   if (localStream) return localStream;
 
@@ -205,18 +213,13 @@ async function getMediaStream() {
       video: true
     });
   } catch (e1) {
-    console.warn("Video failed, trying audio only", e1);
-
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: false
       });
     } catch (e2) {
-      console.warn("Mic blocked", e2);
-
-      document.getElementById("videoCallOverlay").style.display = "none";
-      alert("Microphone blocked. Please allow permissions in browser settings.");
+      alert("Microphone blocked or unavailable.");
       throw e2;
     }
   }
@@ -231,7 +234,10 @@ async function getMediaStream() {
   return stream;
 }
 
+// PEER CONNECTION
 function createPC() {
+  resetCallState();
+
   pc = new RTCPeerConnection({
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
   });
@@ -250,6 +256,7 @@ function createPC() {
   };
 }
 
+// START CALL
 async function startDirectCall() {
   if (!dmTarget) return alert("Pick a user first");
 
@@ -267,6 +274,7 @@ async function startDirectCall() {
   sendSignal(dmTarget, { type: "offer", sdp: offer });
 }
 
+// SEND SIGNAL
 async function sendSignal(to, payload) {
   await fetch(API + "/dm/send", {
     method: "POST",
@@ -279,6 +287,7 @@ async function sendSignal(to, payload) {
   });
 }
 
+// HANDLE SIGNALS (FIXED)
 function handleSignal(msgs) {
   const signals = msgs.filter(m => m.text?.startsWith("__CALL__"));
 
@@ -289,33 +298,51 @@ function handleSignal(msgs) {
     if (type === "offer") {
       dmTarget = m.from;
 
-      getMediaStream().then(() => {
+      getMediaStream().then(async () => {
         createPC();
         localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-        pc.setRemoteDescription(new RTCSessionDescription(sdp))
-          .then(() => pc.createAnswer())
-          .then(a => pc.setLocalDescription(a))
-          .then(() => {
-            sendSignal(dmTarget, { type: "answer", sdp: pc.localDescription });
-          });
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+
+        remoteDescSet = true;
+
+        // flush ICE queue
+        iceQueue.forEach(c => {
+          pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
+        });
+        iceQueue = [];
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        sendSignal(dmTarget, { type: "answer", sdp: pc.localDescription });
 
         showOverlay();
       });
+    }
 
-    } else if (type === "answer") {
-      pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    else if (type === "answer") {
+      pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(() => {
+        remoteDescSet = true;
 
-    } else if (type === "candidate") {
+        iceQueue.forEach(c => {
+          pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
+        });
+        iceQueue = [];
+      });
+    }
+
+    else if (type === "candidate") {
       if (!remoteDescSet) {
         iceQueue.push(candidate);
       } else {
-        pc.addIceCandidate(new RTCIceCandidate(candidate));
+        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(()=>{});
       }
     }
   }
 }
 
+// CONTROLS
 function toggleMute() {
   localStream?.getAudioTracks().forEach(t => t.enabled = !t.enabled);
 }
@@ -324,11 +351,12 @@ function toggleCamera() {
   localStream?.getVideoTracks().forEach(t => t.enabled = !t.enabled);
 }
 
+// END CALL
 function endCall() {
   pc?.close();
   pc = null;
-  remoteDescSet = false;
-  iceQueue = [];
+
+  resetCallState();
 
   localStream?.getTracks().forEach(t => t.stop());
   localStream = null;
@@ -336,8 +364,7 @@ function endCall() {
   closeOverlay();
 }
 
-async function send() {}
-
+// POLL
 setInterval(async () => {
   const res = await fetch(API + "/dm/get", {
     method: "POST",
