@@ -3,7 +3,6 @@
 <head>
   <title>Specter Chat</title>
 
-  <!-- FAVICON -->
   <link id="favicon" rel="icon" type="image/png" href="specter_logo_normal.png">
 
   <style>
@@ -57,9 +56,9 @@
     #inputArea input {
       flex: 1;
       padding: 10px;
-      border: none;
       border-radius: 5px;
       margin-right: 10px;
+      border: none;
     }
 
     #inputArea button {
@@ -79,9 +78,58 @@
       padding: 15px 20px;
       border-radius: 10px;
       display: none;
-      color: white;
-      font-weight: bold;
-      box-shadow: 0 0 15px #ff00ff;
+    }
+
+    /* CALL POPUP */
+    #callPopup {
+      position: fixed;
+      bottom: 100px;
+      right: 20px;
+      background: #222;
+      padding: 15px;
+      border-radius: 10px;
+      display: none;
+      box-shadow: 0 0 10px black;
+    }
+
+    #callPopup button {
+      margin: 5px;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .accept { background: green; color: white; }
+    .decline { background: red; color: white; }
+
+    /* VIDEO */
+    #videoCall {
+      display:none;
+      position:fixed;
+      top:0;
+      left:0;
+      width:100%;
+      height:100%;
+      background:black;
+      z-index:9999;
+    }
+
+    #videoCall iframe {
+      width:100%;
+      height:100%;
+      border:none;
+    }
+
+    #endCall {
+      position:absolute;
+      top:10px;
+      right:10px;
+      background:red;
+      color:white;
+      padding:10px;
+      border:none;
+      z-index:10000;
     }
 
     .msg.me {
@@ -101,8 +149,8 @@
 
   <button onclick="switchMode('public')">Public Chat</button>
   <button onclick="switchMode('dm')">DMs</button>
+  <button onclick="startCall()">📞 Call</button>
   <button onclick="logout()">Logout</button>
-  <button onclick="dmSound.play()">TEST SOUND</button>
 </div>
 
 <div id="main">
@@ -117,13 +165,24 @@
 
 <div id="dmPopup">New DM!</div>
 
+<!-- CALL POPUP -->
+<div id="callPopup">
+  <div>☎️ Incoming Call</div>
+  <button class="accept" onclick="acceptCall()">📞</button>
+  <button class="decline" onclick="declineCall()">❌</button>
+</div>
+
+<!-- VIDEO -->
+<div id="videoCall">
+  <button id="endCall" onclick="endCall()">End</button>
+  <iframe id="callFrame"></iframe>
+</div>
+
 <script>
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 const user = localStorage.getItem("user");
 
 if (!user) window.location = "index.html";
-
-document.title = "Specter Chat - " + user;
 
 let mode = "public";
 let dmTarget = null;
@@ -131,25 +190,26 @@ let dmTarget = null;
 let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
 let initialized = false;
 
-// SOUND
+let currentRoom = null;
+
+// sounds
 const dmSound = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
-dmSound.volume = 1.0;
+const ring = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 
 let audioUnlocked = false;
 
-// unlock audio
 document.addEventListener("click", async () => {
   if (audioUnlocked) return;
-
   try {
     await dmSound.play();
     dmSound.pause();
-    dmSound.currentTime = 0;
+    ring.play();
+    ring.pause();
     audioUnlocked = true;
-  } catch (e) {}
+  } catch {}
 });
 
-// escape HTML
+// escape
 function escapeHTML(str) {
   return str.replace(/[&<>"']/g, c => ({
     '&': '&amp;',
@@ -183,18 +243,12 @@ function switchMode(m) {
   mode = m;
   document.getElementById("messages").style.display = m === "public" ? "block" : "none";
   document.getElementById("dmMessages").style.display = m === "dm" ? "block" : "none";
-  if (m === "public") dmTarget = null;
 }
 
 // OPEN DM
 function openDM(target) {
   dmTarget = target;
   switchMode("dm");
-
-  lastSeenDM = 0;
-  localStorage.setItem("lastSeenDM", lastSeenDM);
-
-  loadDMs();
 }
 
 // SEND
@@ -206,14 +260,14 @@ async function send() {
   if (mode === "public") {
     await fetch(API + "/send", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: user, text })
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ username:user, text })
     });
   } else {
     await fetch(API + "/dm/send", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from: user, to: dmTarget, text })
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ from:user, to:dmTarget, text })
     });
   }
 
@@ -222,52 +276,89 @@ async function send() {
   loadDMs();
 }
 
-// ENTER SEND
-document.getElementById("msg").addEventListener("keypress", e => {
-  if (e.key === "Enter") send();
-});
+// CALL START
+async function startCall() {
+  if (!dmTarget) return alert("Open a DM first");
+
+  const room = "specter_" + Date.now();
+  currentRoom = room;
+
+  await fetch(API + "/dm/send", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      from: user,
+      to: dmTarget,
+      text: "__CALL__:" + room
+    })
+  });
+
+  openVideo(room);
+}
+
+// CHECK CALLS
+async function checkCalls(dms) {
+  const call = dms.find(m =>
+    m.to === user &&
+    m.text.startsWith("__CALL__:")
+  );
+
+  if (call) {
+    currentRoom = call.text.split(":")[1];
+    document.getElementById("callPopup").style.display = "block";
+    if (audioUnlocked) ring.play().catch(()=>{});
+  }
+}
+
+// ACCEPT
+function acceptCall() {
+  document.getElementById("callPopup").style.display = "none";
+  ring.pause();
+  openVideo(currentRoom);
+}
+
+// DECLINE
+function declineCall() {
+  document.getElementById("callPopup").style.display = "none";
+  ring.pause();
+}
+
+// VIDEO
+function openVideo(room) {
+  document.getElementById("videoCall").style.display = "block";
+  document.getElementById("callFrame").src = "https://meet.jit.si/" + room;
+}
+
+// END
+function endCall() {
+  document.getElementById("videoCall").style.display = "none";
+  document.getElementById("callFrame").src = "";
+}
 
 // LOAD DMs
 async function loadDMs() {
   const res = await fetch(API + "/dm/get", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: user })
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ username:user })
   });
 
   const dms = await res.json();
 
+  checkCalls(dms);
+
   const incoming = dms
     .filter(m => m.to === user && m.from !== user)
-    .sort((a, b) => new Date(a.time) - new Date(b.time));
-
-  const favicon = document.getElementById("favicon");
+    .sort((a,b)=> new Date(a.time)-new Date(b.time));
 
   const latest = incoming[incoming.length - 1];
   const newestTime = latest ? new Date(latest.time).getTime() : 0;
 
-  const hasNewDM =
-    initialized &&
-    newestTime > lastSeenDM;
+  const hasNewDM = initialized && newestTime > lastSeenDM;
 
-  // favicon
-  favicon.href = (hasNewDM && mode !== "dm")
-    ? "specter_logo_alert.png"
-    : "specter_logo_normal.png";
-
-  // notification + sound
   if (hasNewDM && mode !== "dm") {
     showDMPopup();
-
-    if (audioUnlocked) {
-      dmSound.currentTime = 0;
-      dmSound.play().catch(() => {});
-    }
-
-    if (Notification.permission === "granted") {
-      new Notification("New DM!", { body: latest.text });
-    }
-
+    if (audioUnlocked) dmSound.play().catch(()=>{});
     lastSeenDM = newestTime;
     localStorage.setItem("lastSeenDM", lastSeenDM);
   }
@@ -281,15 +372,12 @@ async function loadDMs() {
     (m.from === dmTarget && m.to === user)
   );
 
-  const box = document.getElementById("dmMessages");
-
-  box.innerHTML = filtered.map(m => `
-    <p class="msg ${m.from === user ? 'me' : ''}">
-      <b>${escapeHTML(m.from)} → ${escapeHTML(m.to)}:</b> ${escapeHTML(m.text)}
-    </p>
-  `).join("");
-
-  box.scrollTop = box.scrollHeight;
+  document.getElementById("dmMessages").innerHTML =
+    filtered.map(m => `
+      <p class="msg ${m.from === user ? 'me' : ''}">
+        <b>${escapeHTML(m.from)}:</b> ${escapeHTML(m.text)}
+      </p>
+    `).join("");
 }
 
 // PUBLIC
@@ -299,15 +387,12 @@ async function loadMessages() {
   const res = await fetch(API + "/messages");
   const msgs = await res.json();
 
-  const box = document.getElementById("messages");
-
-  box.innerHTML = msgs.map(m => `
-    <p class="msg ${m.username === user ? 'me' : ''}">
-      <b>${escapeHTML(m.username)}:</b> ${escapeHTML(m.text)}
-    </p>
-  `).join("");
-
-  box.scrollTop = box.scrollHeight;
+  document.getElementById("messages").innerHTML =
+    msgs.map(m => `
+      <p class="msg ${m.username === user ? 'me' : ''}">
+        <b>${escapeHTML(m.username)}:</b> ${escapeHTML(m.text)}
+      </p>
+    `).join("");
 }
 
 // LOGOUT
@@ -329,4 +414,4 @@ loadUsers();
 </script>
 
 </body>
-</html> 
+</html>
