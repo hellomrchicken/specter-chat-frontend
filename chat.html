@@ -77,6 +77,11 @@
       background: #45a047;
     }
 
+    .msg.me {
+      text-align: right;
+      color: #4caf50;
+    }
+
     #dmPopup {
       position: fixed;
       bottom: 20px;
@@ -88,12 +93,7 @@
       box-shadow: 0 0 15px #ff00ff;
     }
 
-    .msg.me {
-      text-align: right;
-      color: #4caf50;
-    }
-
-    /* Incoming group call popup (center) */
+    /* Incoming call popup (center) */
     #callPopup {
       position: fixed;
       top: 50%;
@@ -131,14 +131,13 @@
     .accept { background: #2ecc71; color: white; }
     .decline { background: #e74c3c; color: white; }
 
-    /* Video call overlay (group WebRTC) */
+    /* Video call overlay */
     #videoCallOverlay {
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.85);
       display: none;
       z-index: 8000;
-      display: flex;
       align-items: center;
       justify-content: center;
     }
@@ -146,9 +145,9 @@
     #videoCallWindow {
       position: relative;
       width: 80%;
-      max-width: 1000px;
-      height: 75%;
-      max-height: 650px;
+      max-width: 900px;
+      height: 70%;
+      max-height: 600px;
       background: #181818;
       border-radius: 16px;
       box-shadow: 0 0 30px rgba(0,0,0,0.9);
@@ -176,46 +175,15 @@
       position: relative;
       background: #000;
       display: flex;
-      flex-direction: row;
-      gap: 8px;
-      padding: 8px;
-      box-sizing: border-box;
-    }
-
-    #remoteVideos {
-      flex: 1;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-content: flex-start;
+      align-items: center;
       justify-content: center;
     }
 
-    .remote-video-wrapper {
-      position: relative;
-      background: #000;
-      border-radius: 10px;
-      overflow: hidden;
-      flex: 1 1 calc(50% - 8px);
-      min-width: 200px;
-      min-height: 140px;
-      max-height: 100%;
-    }
-
-    .remote-video-wrapper video {
+    #remoteVideo {
       width: 100%;
       height: 100%;
       object-fit: cover;
-    }
-
-    .remote-name {
-      position: absolute;
-      bottom: 4px;
-      left: 6px;
-      font-size: 12px;
-      background: rgba(0,0,0,0.6);
-      padding: 2px 6px;
-      border-radius: 6px;
+      background: #000;
     }
 
     #localVideoWrapper {
@@ -228,7 +196,6 @@
       border: 2px solid #4caf50;
       overflow: hidden;
       background: #111;
-      z-index: 10;
     }
 
     #localVideo {
@@ -281,7 +248,7 @@
 
   <button onclick="switchMode('public')">Public Chat</button>
   <button onclick="switchMode('dm')">DMs</button>
-  <button onclick="startGroupCall()">📞 Start Group Call</button>
+  <button onclick="startCall()">📞 Call</button>
   <button onclick="logout()">Logout</button>
 </div>
 
@@ -297,15 +264,15 @@
 
 <div id="dmPopup">New DM!</div>
 
-<!-- Incoming group call popup -->
+<!-- Incoming call popup -->
 <div id="callPopup">
-  <div id="callPopupTitle">📞 Group Call</div>
+  <div id="callPopupTitle">☎️ Incoming Call</div>
   <div id="callPopupFrom"></div>
   <button class="accept" onclick="acceptCall()">Accept</button>
   <button class="decline" onclick="declineCall()">Decline</button>
 </div>
 
-<!-- WebRTC group video call overlay -->
+<!-- WebRTC video call overlay -->
 <div id="videoCallOverlay">
   <div id="videoCallWindow">
     <div id="videoHeader">
@@ -313,7 +280,7 @@
       <span id="callWith"></span>
     </div>
     <div id="videoBody">
-      <div id="remoteVideos"></div>
+      <video id="remoteVideo" autoplay playsinline></video>
       <div id="localVideoWrapper">
         <video id="localVideo" autoplay muted playsinline></video>
       </div>
@@ -342,7 +309,6 @@ let audioUnlocked = false;
 const dmSound = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 const ring = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 
-// unlock audio
 document.addEventListener("click", async () => {
   if (audioUnlocked) return;
   try {
@@ -423,7 +389,7 @@ async function send() {
   loadDMs();
 }
 
-// ========== GROUP CALL (WEBRTC, HOST-AS-HUB) ==========
+// ========== 1:1 WEBRTC CALLING ==========
 
 const rtcConfig = {
   iceServers: [
@@ -431,96 +397,55 @@ const rtcConfig = {
   ]
 };
 
-let groupRoomId = null;
-let isGroupHost = false;
-let inGroupCall = false;
-let currentGroupHost = null;
-
+let pc = null;
 let localStream = null;
-let peerConnections = {}; // username -> RTCPeerConnection
-const processedGroupSignals = new Set();
-const seenGroupCalls = new Set();
+let currentCallPeer = null;
+let isCaller = false;
+let pendingOffer = null;
+const processedSignals = new Set();
 
-let pendingGroupRoomId = null;
-let pendingGroupHost = null;
-
-// UI helpers
-function openVideoOverlay() {
-  document.getElementById("videoCallOverlay").style.display = "flex";
-  document.getElementById("callStatus").textContent = isGroupHost ? "Hosting group call" : "In group call";
-  document.getElementById("callWith").textContent = groupRoomId ? ("Room: " + groupRoomId) : "";
+// UI
+function openVideoOverlay(peerName) {
+  const overlay = document.getElementById("videoCallOverlay");
+  overlay.style.display = "flex";
+  document.getElementById("callWith").textContent = peerName ? ("With " + peerName) : "";
+  document.getElementById("callStatus").textContent = isCaller ? "Calling..." : "In call";
 }
 
 function closeVideoOverlay() {
-  document.getElementById("videoCallOverlay").style.display = "none";
-  document.getElementById("remoteVideos").innerHTML = "";
-  const localVideo = document.getElementById("localVideo");
-  localVideo.srcObject = null;
+  const overlay = document.getElementById("videoCallOverlay");
+  overlay.style.display = "none";
+  document.getElementById("remoteVideo").srcObject = null;
+  document.getElementById("localVideo").srcObject = null;
 }
 
-// local media
-async function startLocalStream() {
-  if (localStream) return;
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  const localVideo = document.getElementById("localVideo");
-  localVideo.srcObject = localStream;
+// signaling via DM
+async function sendSignal(toUser, payload) {
+  const text = "__CALL_SIGNAL__" + JSON.stringify({
+    from: user,
+    to: toUser,
+    payload
+  });
+
+  await fetch(API + "/dm/send", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ from:user, to:toUser, text })
+  });
 }
 
-// create remote video element
-function ensureRemoteVideo(username) {
-  const container = document.getElementById("remoteVideos");
-  let wrapper = document.getElementById("remote-" + username);
-  if (!wrapper) {
-    wrapper = document.createElement("div");
-    wrapper.className = "remote-video-wrapper";
-    wrapper.id = "remote-" + username;
-
-    const vid = document.createElement("video");
-    vid.autoplay = true;
-    vid.playsInline = true;
-
-    const label = document.createElement("div");
-    label.className = "remote-name";
-    label.textContent = username;
-
-    wrapper.appendChild(vid);
-    wrapper.appendChild(label);
-    container.appendChild(wrapper);
-  }
-  return wrapper.querySelector("video");
-}
-
-function removeRemoteVideo(username) {
-  const wrapper = document.getElementById("remote-" + username);
-  if (wrapper && wrapper.parentNode) {
-    wrapper.parentNode.removeChild(wrapper);
-  }
-}
-
-// create peer connection
-function createPeerConnectionFor(username) {
-  const pc = new RTCPeerConnection(rtcConfig);
-  peerConnections[username] = pc;
-
-  if (localStream) {
-    localStream.getTracks().forEach(track => {
-      pc.addTrack(track, localStream);
-    });
-  }
+// peer connection
+function createPeerConnection() {
+  pc = new RTCPeerConnection(rtcConfig);
 
   pc.onicecandidate = (event) => {
-    if (event.candidate && groupRoomId) {
-      sendGroupSignal({
-        roomId: groupRoomId,
-        from: user,
-        to: username,
-        payload: { type: "candidate", candidate: event.candidate }
-      });
+    if (event.candidate && currentCallPeer) {
+      sendSignal(currentCallPeer, { type: "candidate", candidate: event.candidate });
     }
   };
 
   pc.ontrack = (event) => {
-    const remoteVideo = ensureRemoteVideo(username);
+    const remoteVideo = document.getElementById("remoteVideo");
     if (event.streams && event.streams[0]) {
       remoteVideo.srcObject = event.streams[0];
     }
@@ -528,102 +453,66 @@ function createPeerConnectionFor(username) {
 
   pc.onconnectionstatechange = () => {
     if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
-      removePeer(username);
+      endCall(false);
     }
   };
-
-  return pc;
 }
 
-function removePeer(username) {
-  const pc = peerConnections[username];
-  if (pc) {
-    try { pc.close(); } catch {}
-    delete peerConnections[username];
+// local media
+async function startLocalStream() {
+  if (localStream) return localStream;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStream = stream;
+    const localVideo = document.getElementById("localVideo");
+    localVideo.srcObject = localStream;
+    return localStream;
+  } catch (err) {
+    console.error("getUserMedia error:", err);
+    alert("Could not access camera/microphone. Make sure:\n- You're on HTTPS or localhost\n- Permissions are allowed in the browser\n- No other app is locking the camera/mic");
+    throw err;
   }
-  removeRemoteVideo(username);
 }
 
-// send group signal via public chat
-async function sendGroupSignal(obj) {
-  const text = "__GROUP_SIGNAL__" + JSON.stringify(obj);
-  await fetch(API + "/send", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ username: user, text })
-  });
-}
-
-// start group call (host)
-async function startGroupCall() {
-  if (inGroupCall) {
+// start call
+async function startCall() {
+  if (!dmTarget) {
+    alert("Open a DM first to call someone.");
+    return;
+  }
+  if (pc || currentCallPeer) {
     alert("You are already in a call.");
     return;
   }
 
-  groupRoomId = "room_" + Date.now();
-  isGroupHost = true;
-  inGroupCall = true;
-  currentGroupHost = user;
-
-  openVideoOverlay();
+  currentCallPeer = dmTarget;
+  isCaller = true;
 
   try {
     await startLocalStream();
-  } catch (e) {
-    alert("Could not access camera/microphone.");
-    endCall(false);
+  } catch {
+    currentCallPeer = null;
+    isCaller = false;
     return;
   }
 
-  // announce group call
-  const announce = "__GROUP_CALL__" + JSON.stringify({
-    roomId: groupRoomId,
-    host: user,
-    time: Date.now()
-  });
+  createPeerConnection();
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-  await fetch(API + "/send", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ username: user, text: announce })
-  });
+  openVideoOverlay(currentCallPeer);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  await sendSignal(currentCallPeer, { type: "offer", sdp: offer });
 }
 
-// handle group call announcements
-function handleGroupAnnouncements(msgs) {
-  const calls = msgs.filter(m => m.text && m.text.startsWith("__GROUP_CALL__"));
-
-  if (!calls.length) return;
-
-  // take latest
-  calls.sort((a,b)=> new Date(b.time) - new Date(a.time));
-  const latest = calls[0];
-
-  const key = latest.time + "|" + latest.username + "|" + latest.text.length;
-  if (seenGroupCalls.has(key)) return;
-  seenGroupCalls.add(key);
-
-  let data;
-  try {
-    data = JSON.parse(latest.text.replace("__GROUP_CALL__", ""));
-  } catch {
-    return;
-  }
-
-  const { roomId, host } = data;
-  if (!roomId || !host) return;
-
-  // ignore if we are host or already in call
-  if (host === user || inGroupCall) return;
-
-  // show popup
-  pendingGroupRoomId = roomId;
-  pendingGroupHost = host;
-
-  document.getElementById("callPopupFrom").textContent =
-    host + " started a group call. Join?";
-  document.getElementById("callPopup").style.display = "block";
+// incoming call popup
+function showIncomingCallPopup(fromUser) {
+  const popup = document.getElementById("callPopup");
+  document.getElementById("callPopupFrom").textContent = fromUser + " is calling you";
+  popup.style.display = "block";
 
   if (audioUnlocked) {
     ring.currentTime = 0;
@@ -631,196 +520,84 @@ function handleGroupAnnouncements(msgs) {
   }
 }
 
-// accept group call
+function hideIncomingCallPopup() {
+  document.getElementById("callPopup").style.display = "none";
+  ring.pause();
+}
+
+// accept
 async function acceptCall() {
-  if (!pendingGroupRoomId || !pendingGroupHost) {
-    declineCall();
+  if (!pendingOffer) {
+    hideIncomingCallPopup();
     return;
   }
 
-  document.getElementById("callPopup").style.display = "none";
-  ring.pause();
+  const from = pendingOffer.from;
+  const remoteSDP = pendingOffer.sdp;
 
-  groupRoomId = pendingGroupRoomId;
-  currentGroupHost = pendingGroupHost;
-  pendingGroupRoomId = null;
-  pendingGroupHost = null;
+  currentCallPeer = from;
+  isCaller = false;
 
-  isGroupHost = false;
-  inGroupCall = true;
-
-  openVideoOverlay();
+  hideIncomingCallPopup();
 
   try {
     await startLocalStream();
-  } catch (e) {
-    alert("Could not access camera/microphone.");
-    endCall(false);
+  } catch {
+    // tell caller we can't
+    await sendSignal(from, { type: "end" });
+    pendingOffer = null;
+    currentCallPeer = null;
     return;
   }
 
-  // send join signal to host
-  await sendGroupSignal({
-    roomId: groupRoomId,
-    from: user,
-    to: currentGroupHost,
-    payload: { type: "join" }
-  });
+  createPeerConnection();
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  openVideoOverlay(currentCallPeer);
+
+  pendingOffer = null;
+
+  await pc.setRemoteDescription(new RTCSessionDescription(remoteSDP));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  await sendSignal(currentCallPeer, { type: "answer", sdp: answer });
 }
 
-// decline group call
+// decline
 function declineCall() {
-  document.getElementById("callPopup").style.display = "none";
-  ring.pause();
-  pendingGroupRoomId = null;
-  pendingGroupHost = null;
-}
-
-// handle group signaling
-async function handleGroupSignals(msgs) {
-  const signals = msgs.filter(m => m.text && m.text.startsWith("__GROUP_SIGNAL__"));
-
-  for (const m of signals) {
-    const key = m.time + "|" + m.username + "|" + m.text.length;
-    if (processedGroupSignals.has(key)) continue;
-    processedGroupSignals.add(key);
-
-    let data;
-    try {
-      data = JSON.parse(m.text.replace("__GROUP_SIGNAL__", ""));
-    } catch {
-      continue;
-    }
-
-    const { roomId, from, to, payload } = data || {};
-    if (!roomId || !payload || !from) continue;
-
-    // ignore if not our room
-    if (roomId !== groupRoomId && !(payload.type === "join" && isGroupHost && roomId === groupRoomId)) {
-      // special case: host may see join before setting roomId? but host already has it
-      if (!(isGroupHost && roomId === groupRoomId)) continue;
-    }
-
-    // ignore our own signals
-    if (from === user) continue;
-
-    // host logic
-    if (isGroupHost && roomId === groupRoomId) {
-      if (payload.type === "join" && to === user) {
-        // new participant wants to join
-        const username = from;
-        if (!peerConnections[username]) {
-          const pc = createPeerConnectionFor(username);
-          // create offer to participant
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          await sendGroupSignal({
-            roomId: groupRoomId,
-            from: user,
-            to: username,
-            payload: { type: "offer", sdp: offer }
-          });
-        }
-      } else if (payload.type === "answer" && to === user) {
-        const username = from;
-        const pc = peerConnections[username];
-        if (pc && payload.sdp) {
-          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-        }
-      } else if (payload.type === "candidate" && to === user) {
-        const username = from;
-        const pc = peerConnections[username];
-        if (pc && payload.candidate) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          } catch {}
-        }
-      } else if (payload.type === "end" && to === user) {
-        // participant left
-        removePeer(from);
-      }
-    }
-
-    // participant logic
-    if (!isGroupHost && inGroupCall && roomId === groupRoomId) {
-      if (payload.type === "offer" && to === user && from === currentGroupHost) {
-        // host sent offer
-        let pc = peerConnections[from];
-        if (!pc) {
-          pc = createPeerConnectionFor(from);
-        }
-        if (payload.sdp) {
-          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          await sendGroupSignal({
-            roomId: groupRoomId,
-            from: user,
-            to: from,
-            payload: { type: "answer", sdp: answer }
-          });
-        }
-      } else if (payload.type === "candidate" && to === user && from === currentGroupHost) {
-        const pc = peerConnections[from];
-        if (pc && payload.candidate) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          } catch {}
-        }
-      } else if (payload.type === "end" && to === user && from === currentGroupHost) {
-        // host ended call
-        endCall(false);
-      }
-    }
+  if (pendingOffer) {
+    const from = pendingOffer.from;
+    sendSignal(from, { type: "end" });
+    pendingOffer = null;
   }
+  hideIncomingCallPopup();
 }
 
 // end call
 async function endCall(sendSignalToo = true) {
-  if (sendSignalToo && inGroupCall && groupRoomId) {
-    if (isGroupHost) {
-      // host: tell all peers
-      const peers = Object.keys(peerConnections);
-      for (const p of peers) {
-        await sendGroupSignal({
-          roomId: groupRoomId,
-          from: user,
-          to: p,
-          payload: { type: "end" }
-        });
-      }
-    } else if (currentGroupHost) {
-      // participant: tell host
-      await sendGroupSignal({
-        roomId: groupRoomId,
-        from: user,
-        to: currentGroupHost,
-        payload: { type: "end" }
-      });
-    }
+  if (sendSignalToo && currentCallPeer) {
+    await sendSignal(currentCallPeer, { type: "end" });
   }
 
-  // cleanup peers
-  for (const u in peerConnections) {
-    removePeer(u);
+  if (pc) {
+    try { pc.close(); } catch {}
+    pc = null;
   }
-  peerConnections = {};
 
-  // cleanup local stream
   if (localStream) {
     localStream.getTracks().forEach(t => t.stop());
     localStream = null;
   }
 
-  inGroupCall = false;
-  isGroupHost = false;
-  groupRoomId = null;
-  currentGroupHost = null;
+  currentCallPeer = null;
+  isCaller = false;
+  pendingOffer = null;
 
   closeVideoOverlay();
 }
 
-// controls
+// mute / cam
 function toggleMute() {
   if (!localStream) return;
   const audioTracks = localStream.getAudioTracks();
@@ -839,6 +616,55 @@ function toggleCamera() {
   document.getElementById("camBtn").textContent = track.enabled ? "Camera Off" : "Camera On";
 }
 
+// handle signaling from DMs
+function handleCallSignals(dms) {
+  const signals = dms.filter(m => m.text && m.text.startsWith("__CALL_SIGNAL__"));
+
+  for (const m of signals) {
+    const key = m.time + "|" + m.from + "|" + m.to + "|" + m.text.length;
+    if (processedSignals.has(key)) continue;
+    processedSignals.add(key);
+
+    let data;
+    try {
+      data = JSON.parse(m.text.replace("__CALL_SIGNAL__", ""));
+    } catch {
+      continue;
+    }
+
+    const { from, to, payload } = data || {};
+    if (!payload) continue;
+
+    // ignore our own signaling
+    if (from === user) continue;
+
+    // only care about messages to us or from our current peer
+    if (to !== user && from !== currentCallPeer) continue;
+
+    if (payload.type === "offer" && to === user) {
+      // already in a call? reject
+      if (pc || currentCallPeer || localStream) {
+        sendSignal(from, { type: "end" });
+        continue;
+      }
+
+      pendingOffer = { from, sdp: payload.sdp };
+      showIncomingCallPopup(from);
+
+    } else if (payload.type === "answer" && from === currentCallPeer && pc) {
+      pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+
+    } else if (payload.type === "candidate" && pc) {
+      pc.addIceCandidate(new RTCIceCandidate(payload.candidate)).catch(()=>{});
+
+    } else if (payload.type === "end") {
+      if (from === currentCallPeer || to === currentCallPeer || to === user) {
+        endCall(false);
+      }
+    }
+  }
+}
+
 // ========== DM LOAD ==========
 
 async function loadDMs() {
@@ -849,6 +675,8 @@ async function loadDMs() {
   });
 
   const dms = await res.json();
+
+  handleCallSignals(dms);
 
   const incoming = dms
     .filter(m => m.to === user && m.from !== user)
@@ -865,6 +693,7 @@ async function loadDMs() {
   if (!dmTarget) return;
 
   const filtered = dms.filter(m =>
+    !m.text.startsWith("__CALL_SIGNAL__") &&
     ((m.from === user && m.to === dmTarget) ||
      (m.from === dmTarget && m.to === user))
   );
@@ -880,20 +709,10 @@ async function loadMessages() {
   const res = await fetch(API + "/messages");
   const msgs = await res.json();
 
-  // handle group call stuff
-  handleGroupAnnouncements(msgs);
-  handleGroupSignals(msgs);
-
   if (mode !== "public") return;
 
-  // hide signaling messages from chat
-  const visible = msgs.filter(m =>
-    !m.text.startsWith("__GROUP_CALL__") &&
-    !m.text.startsWith("__GROUP_SIGNAL__")
-  );
-
   document.getElementById("messages").innerHTML =
-    visible.map(m =>
+    msgs.map(m =>
       `<p class="${m.username===user?'msg me':'msg'}"><b>${escapeHTML(m.username)}:</b> ${escapeHTML(m.text)}</p>`
     ).join("");
 }
