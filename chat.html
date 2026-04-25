@@ -184,17 +184,15 @@ let mode = "public";
 let dmTarget = null;
 
 let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
-let lastCallTime = Number(localStorage.getItem("lastCallTime")) || 0;
 
-let initialized = false;
+const seenCalls = new Set();
 let currentRoom = null;
 
-// SOUND
+let audioUnlocked = false;
 const dmSound = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 const ring = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 
-let audioUnlocked = false;
-
+// unlock audio
 document.addEventListener("click", async () => {
   if (audioUnlocked) return;
   try {
@@ -217,6 +215,13 @@ function escapeHTML(str) {
   }[c]));
 }
 
+// switch
+function switchMode(m) {
+  mode = m;
+  document.getElementById("messages").style.display = m === "public" ? "block" : "none";
+  document.getElementById("dmMessages").style.display = m === "dm" ? "block" : "none";
+}
+
 // USERS
 async function loadUsers() {
   const res = await fetch(API + "/messages");
@@ -228,14 +233,6 @@ async function loadUsers() {
     users.map(u => `<p onclick="openDM('${u}')">${escapeHTML(u)}</p>`).join("");
 }
 
-// MODE
-function switchMode(m) {
-  mode = m;
-  document.getElementById("messages").style.display = m === "public" ? "block" : "none";
-  document.getElementById("dmMessages").style.display = m === "dm" ? "block" : "none";
-}
-
-// DM
 function openDM(target) {
   dmTarget = target;
   switchMode("dm");
@@ -286,7 +283,7 @@ async function startCall() {
   openVideo(room);
 }
 
-// CALL CHECK
+// CHECK CALLS (FIXED)
 function checkCalls(dms) {
   const calls = dms
     .filter(m => m.to === user && m.text.startsWith("__CALL__:"))
@@ -295,17 +292,19 @@ function checkCalls(dms) {
   if (!calls.length) return;
 
   const call = calls[0];
-  const time = new Date(call.time).getTime();
+  const room = call.text.split(":")[1];
 
-  if (time <= lastCallTime) return;
+  if (seenCalls.has(room)) return;
+  seenCalls.add(room);
 
-  lastCallTime = time;
-  localStorage.setItem("lastCallTime", lastCallTime);
+  currentRoom = room;
 
-  currentRoom = call.text.split(":")[1];
   document.getElementById("callPopup").style.display = "block";
 
-  if (audioUnlocked) ring.play().catch(()=>{});
+  if (audioUnlocked) {
+    ring.currentTime = 0;
+    ring.play().catch(()=>{});
+  }
 }
 
 // ACCEPT
@@ -321,19 +320,24 @@ function declineCall() {
   ring.pause();
 }
 
-// VIDEO
+// VIDEO FIXED (auto name + instant join)
 function openVideo(room) {
   document.getElementById("videoCall").style.display = "block";
-  document.getElementById("callFrame").src = "https://meet.jit.si/" + room;
+
+  const name = encodeURIComponent(user);
+
+  document.getElementById("callFrame").src =
+    `https://meet.jit.si/${room}#config.prejoinPageEnabled=false&userInfo.displayName=${name}`;
 }
 
 // END
 function endCall() {
   document.getElementById("videoCall").style.display = "none";
   document.getElementById("callFrame").src = "";
+  currentRoom = null;
 }
 
-// LOAD DMS
+// DM LOAD
 async function loadDMs() {
   const res = await fetch(API + "/dm/get", {
     method:"POST",
@@ -352,24 +356,17 @@ async function loadDMs() {
   const latest = incoming[incoming.length-1];
   const newestTime = latest ? new Date(latest.time).getTime() : 0;
 
-  const hasNewDM = initialized && newestTime > lastSeenDM;
-
-  if (hasNewDM && mode !== "dm") {
+  if (newestTime > lastSeenDM) {
     lastSeenDM = newestTime;
     localStorage.setItem("lastSeenDM", lastSeenDM);
-    if (audioUnlocked) dmSound.play().catch(()=>{});
   }
-
-  initialized = true;
 
   if (!dmTarget) return;
 
   const filtered = dms.filter(m =>
     !m.text.startsWith("__CALL__:") &&
-    (
-      (m.from === user && m.to === dmTarget) ||
-      (m.from === dmTarget && m.to === user)
-    )
+    ((m.from === user && m.to === dmTarget) ||
+     (m.from === dmTarget && m.to === user))
   );
 
   document.getElementById("dmMessages").innerHTML =
@@ -392,11 +389,11 @@ async function loadMessages() {
 }
 
 // LOOP
-setInterval(()=>{
+setInterval(() => {
   loadMessages();
   loadDMs();
   loadUsers();
-},2000);
+}, 2000);
 
 loadMessages();
 loadUsers();
