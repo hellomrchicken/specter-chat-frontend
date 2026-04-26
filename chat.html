@@ -216,7 +216,6 @@ if (!user) window.location = "index.html";
 
 let mode = "public";
 let dmTarget = null;
-let lastSeenDM = Number(localStorage.getItem("lastSeenDM")) || 0;
 
 // audio unlock
 let audioUnlocked = false;
@@ -235,7 +234,11 @@ document.addEventListener("click", async () => {
 // helpers
 function escapeHTML(str) {
   return str.replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
   }[c]));
 }
 
@@ -299,7 +302,6 @@ async function loadMessages() {
   const res = await fetch(API + "/messages");
   const msgs = await res.json();
 
-  // if you had group call stuff before, it's ignored now
   const visible = msgs.filter(m =>
     !m.text.startsWith("__GROUP_CALL__") &&
     !m.text.startsWith("__GROUP_SIGNAL__")
@@ -313,7 +315,7 @@ async function loadMessages() {
     ).join("");
 }
 
-// ===== NEW DM + CALL LOGIC =====
+// ===== NEW CALL + DM LOGIC =====
 
 let pc = null;
 let localStream = null;
@@ -433,13 +435,17 @@ function endCall() {
   currentCallPeer = null;
 }
 
-// DM loading + signaling
+// DM loading + signaling using /dm/get
 async function loadDMs() {
   try {
-    const res = await fetch(API + "/dm/list?user=" + encodeURIComponent(user));
+    const res = await fetch(API + "/dm/get", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ username: user })
+    });
     const dms = await res.json();
 
-    // show normal DMs
+    // normal DMs (no call control messages)
     const normal = dms.filter(m =>
       !m.text.startsWith("__CALL_OFFER__") &&
       !m.text.startsWith("__CALL_ANSWER__") &&
@@ -456,11 +462,8 @@ async function loadDMs() {
         ).join("");
     }
 
-    // notification for new DMs
-    const newest = dms.reduce((max, m) => Math.max(max, m.id || 0), 0);
-    if (newest > lastSeenDM) {
-      lastSeenDM = newest;
-      localStorage.setItem("lastSeenDM", String(lastSeenDM));
+    // simple DM popup (any new DM)
+    if (dms.length > 0) {
       dmPopup.style.display = "block";
       dmSound.currentTime = 0;
       dmSound.play().catch(()=>{});
@@ -469,11 +472,10 @@ async function loadDMs() {
 
     // handle call signaling
     for (const m of dms) {
-      if (m.to !== user) continue; // only handle incoming to me
+      if (m.to !== user) continue; // only incoming to me
 
       if (m.text.startsWith("__CALL_OFFER__")) {
         const offer = JSON.parse(m.text.replace("__CALL_OFFER__", ""));
-        // if already in call, ignore
         if (inCall) continue;
         pendingOffer = offer;
         currentCallPeer = m.from;
