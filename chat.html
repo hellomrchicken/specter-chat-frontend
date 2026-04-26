@@ -93,7 +93,6 @@
       box-shadow: 0 0 15px #ff00ff;
     }
 
-    /* Call overlay */
     #callOverlay {
       position: fixed;
       inset: 0;
@@ -191,14 +190,12 @@
 
 <div id="dmPopup">New DM!</div>
 
-<!-- Incoming call popup -->
 <div id="incomingCallPopup">
   <span id="incomingCallText"></span>
   <button id="acceptCallBtn" onclick="acceptIncomingCall()">Accept</button>
   <button id="rejectCallBtn" onclick="rejectIncomingCall()">Reject</button>
 </div>
 
-<!-- Call overlay -->
 <div id="callOverlay">
   <div id="callVideos">
     <video id="localVideo" autoplay playsinline muted></video>
@@ -216,22 +213,11 @@ if (!user) window.location = "index.html";
 
 let mode = "public";
 let dmTarget = null;
+let seenDMIds = new Set();
 
-// audio unlock
-let audioUnlocked = false;
 const dmSound = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 const ring = new Audio("https://hellomrchicken.github.io/specter-chat-frontend/dm.mp3");
 
-document.addEventListener("click", async () => {
-  if (audioUnlocked) return;
-  try {
-    await dmSound.play(); dmSound.pause();
-    await ring.play(); ring.pause();
-    audioUnlocked = true;
-  } catch {}
-});
-
-// helpers
 function escapeHTML(str) {
   return str.replace(/[&<>"']/g, c => ({
     '&': '&amp;',
@@ -254,7 +240,6 @@ function logout() {
   window.location = "index.html";
 }
 
-// USERS
 async function loadUsers() {
   const res = await fetch(API + "/messages");
   const msgs = await res.json();
@@ -268,7 +253,6 @@ function openDM(target) {
   switchMode("dm");
 }
 
-// SEND
 async function send() {
   const input = document.getElementById("msg");
   const text = input.value.trim();
@@ -281,10 +265,6 @@ async function send() {
       body: JSON.stringify({ username:user, text })
     });
   } else {
-    if (!dmTarget) {
-      alert("Select a user from the list first.");
-      return;
-    }
     await fetch(API + "/dm/send", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
@@ -293,41 +273,12 @@ async function send() {
   }
 
   input.value = "";
-  loadMessages();
-  loadDMs();
-}
-  
-// PUBLIC
-async function loadMessages() {
-  const res = await fetch(API + "/messages");
-  const msgs = await res.json();
-
-  const visible = msgs.filter(m =>
-    !m.text.startsWith("__GROUP_CALL__") &&
-    !m.text.startsWith("__GROUP_SIGNAL__")
-  );
-
-  if (mode !== "public") return;
-
-  document.getElementById("messages").innerHTML =
-    visible.map(m =>
-      `<p class="${m.username===user?'msg me':'msg'}"><b>${escapeHTML(m.username)}:</b> ${escapeHTML(m.text)}</p>`
-    ).join("");
 }
 
-// ===== NEW CALL + DM LOGIC =====
-
-let pc = null;
-let localStream = null;
-let currentCallPeer = null;
-let pendingOffer = null;
-let inCall = false;
+let pc, localStream, currentCallPeer, pendingOffer, inCall=false;
 
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
-const callOverlay = document.getElementById("callOverlay");
-const incomingCallPopup = document.getElementById("incomingCallPopup");
-const incomingCallText = document.getElementById("incomingCallText");
 
 async function initMedia() {
   if (localStream) return;
@@ -336,178 +287,122 @@ async function initMedia() {
 }
 
 function createPeerConnection() {
-  pc = new RTCPeerConnection({
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-  });
-
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-  pc.ontrack = e => {
-    remoteVideo.srcObject = e.streams[0];
-  };
-
-  pc.onicecandidate = async e => {
-    if (e.candidate && currentCallPeer) {
-      await fetch(API + "/dm/send", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          from: user,
-          to: currentCallPeer,
-          text: "__CALL_CAND__" + JSON.stringify(e.candidate)
-        })
+  pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+  localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+  pc.ontrack=e=>remoteVideo.srcObject=e.streams[0];
+  pc.onicecandidate=e=>{
+    if(e.candidate && currentCallPeer){
+      fetch(API+"/dm/send",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({from:user,to:currentCallPeer,text:"__CALL_CAND__"+JSON.stringify(e.candidate)})
       });
     }
   };
 }
 
-function showCallOverlay(show) {
-  callOverlay.style.display = show ? "flex" : "none";
-}
-
-async function startCall() {
-  if (!dmTarget) {
-    alert("Select a user first.");
-    return;
-  }
-  currentCallPeer = dmTarget;
+async function startCall(){
+  currentCallPeer=dmTarget;
   await initMedia();
   createPeerConnection();
-  const offer = await pc.createOffer();
+  const offer=await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  await fetch(API + "/dm/send", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      from: user,
-      to: currentCallPeer,
-      text: "__CALL_OFFER__" + JSON.stringify(offer)
-    })
+  await fetch(API+"/dm/send",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({from:user,to:currentCallPeer,text:"__CALL_OFFER__"+JSON.stringify(offer)})
   });
 
-  showCallOverlay(true);
-  inCall = true;
+  callOverlay.style.display="flex";
+  inCall=true;
 }
 
-async function acceptIncomingCall() {
-  incomingCallPopup.style.display = "none";
-  if (!pendingOffer || !currentCallPeer) return;
-
+async function acceptIncomingCall(){
+  incomingCallPopup.style.display="none";
   await initMedia();
   createPeerConnection();
+
   await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
-  const answer = await pc.createAnswer();
+  const answer=await pc.createAnswer();
   await pc.setLocalDescription(answer);
 
-  await fetch(API + "/dm/send", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      from: user,
-      to: currentCallPeer,
-      text: "__CALL_ANSWER__" + JSON.stringify(answer)
-    })
+  await fetch(API+"/dm/send",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({from:user,to:currentCallPeer,text:"__CALL_ANSWER__"+JSON.stringify(answer)})
   });
 
-  showCallOverlay(true);
-  inCall = true;
-  pendingOffer = null;
+  callOverlay.style.display="flex";
+  inCall=true;
 }
 
-function rejectIncomingCall() {
-  incomingCallPopup.style.display = "none";
-  pendingOffer = null;
-  currentCallPeer = null;
+function rejectIncomingCall(){
+  incomingCallPopup.style.display="none";
 }
 
-function endCall() {
-  if (pc) {
-    pc.close();
-    pc = null;
-  }
-  if (remoteVideo.srcObject) {
-    remoteVideo.srcObject.getTracks().forEach(t => t.stop());
-    remoteVideo.srcObject = null;
-  }
-  showCallOverlay(false);
-  inCall = false;
-  currentCallPeer = null;
+function endCall(){
+  if(pc) pc.close();
+  callOverlay.style.display="none";
+  inCall=false;
 }
 
-// DM loading + signaling using /dm/get
-async function loadDMs() {
-  try {
-    const res = await fetch(API + "/dm/get", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ username: user })
-    });
-    const dms = await res.json();
+async function loadDMs(){
+  const res=await fetch(API+"/dm/get",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:user})});
+  const dms=await res.json();
 
-    // normal DMs (no call control messages)
-    const normal = dms.filter(m =>
-      !m.text.startsWith("__CALL_OFFER__") &&
-      !m.text.startsWith("__CALL_ANSWER__") &&
-      !m.text.startsWith("__CALL_CAND__")
-    );
+  let newMsg=false;
 
-    if (mode === "dm") {
-      const filtered = dmTarget
-        ? normal.filter(m => (m.from === user && m.to === dmTarget) || (m.from === dmTarget && m.to === user))
-        : normal;
-      document.getElementById("dmMessages").innerHTML =
-        filtered.map(m =>
-          `<p class="${m.from===user?'msg me':'msg'}"><b>${escapeHTML(m.from)}:</b> ${escapeHTML(m.text)}</p>`
-        ).join("");
+  for(const m of dms){
+    const id=JSON.stringify(m);
+    if(seenDMIds.has(id)) continue;
+    seenDMIds.add(id);
+
+    if(m.text.startsWith("__CALL_OFFER__")){
+      pendingOffer=JSON.parse(m.text.replace("__CALL_OFFER__",""));
+      currentCallPeer=m.from;
+      incomingCallText.textContent=`Incoming call from ${m.from}`;
+      incomingCallPopup.style.display="block";
+      ring.play().catch(()=>{});
+      continue;
     }
 
-    // simple DM popup (any new DM)
-    if (dms.length > 0) {
-      dmPopup.style.display = "block";
-      dmSound.currentTime = 0;
-      dmSound.play().catch(()=>{});
-      setTimeout(() => dmPopup.style.display = "none", 3000);
-    }
-
-    // handle call signaling
-    for (const m of dms) {
-      if (m.to !== user) continue; // only incoming to me
-
-      if (m.text.startsWith("__CALL_OFFER__")) {
-        const offer = JSON.parse(m.text.replace("__CALL_OFFER__", ""));
-        if (inCall) continue;
-        pendingOffer = offer;
-        currentCallPeer = m.from;
-        incomingCallText.textContent = `Incoming call from ${m.from}`;
-        incomingCallPopup.style.display = "block";
-        ring.currentTime = 0;
-        ring.play().catch(()=>{});
-      } else if (m.text.startsWith("__CALL_ANSWER__")) {
-        if (!pc) continue;
-        const answer = JSON.parse(m.text.replace("__CALL_ANSWER__", ""));
+    if(m.text.startsWith("__CALL_ANSWER__")){
+      if(pc){
+        const answer=JSON.parse(m.text.replace("__CALL_ANSWER__",""));
         pc.setRemoteDescription(new RTCSessionDescription(answer));
-      } else if (m.text.startsWith("__CALL_CAND__")) {
-        if (!pc) continue;
-        const cand = JSON.parse(m.text.replace("__CALL_CAND__", ""));
+      }
+      continue;
+    }
+
+    if(m.text.startsWith("__CALL_CAND__")){
+      if(pc){
+        const cand=JSON.parse(m.text.replace("__CALL_CAND__",""));
         pc.addIceCandidate(new RTCIceCandidate(cand)).catch(()=>{});
       }
+      continue;
     }
-  } catch (e) {
-    console.error("loadDMs error", e);
+
+    if(m.to===user) newMsg=true;
+  }
+
+  if(mode==="dm" && dmTarget){
+    const filtered=dms.filter(m=>!m.text.startsWith("__CALL_") &&
+      ((m.from===user && m.to===dmTarget)||(m.from===dmTarget && m.to===user))
+    );
+
+    document.getElementById("dmMessages").innerHTML=
+      filtered.map(m=>`<p class="${m.from===user?'msg me':'msg'}"><b>${escapeHTML(m.from)}:</b> ${escapeHTML(m.text)}</p>`).join("");
+  }
+
+  if(newMsg){
+    dmPopup.style.display="block";
+    dmSound.play().catch(()=>{});
+    setTimeout(()=>dmPopup.style.display="none",2000);
   }
 }
 
-// LOOP
-setInterval(() => {
-  loadMessages();
+setInterval(()=>{
   loadDMs();
   loadUsers();
-}, 2000);
+},2000);
 
-loadMessages();
-loadUsers();
 loadDMs();
+loadUsers();
 </script>
 
 </body>
