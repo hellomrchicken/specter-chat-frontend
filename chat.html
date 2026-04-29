@@ -24,7 +24,7 @@ body {
   gap:10px;
 }
 
-.dmBtn {
+.btn {
   width:55px;
   height:55px;
   background:#222;
@@ -35,11 +35,9 @@ body {
   cursor:pointer;
 }
 
-.dmBtn:hover {
-  background:#444;
-}
+.btn:hover { background:#444; }
 
-/* USERS PANEL */
+/* SIDE PANEL */
 #channels {
   width:220px;
   background:#1a1a1a;
@@ -55,18 +53,15 @@ body {
   color:white;
   border:none;
   border-radius:5px;
-  outline:none;
 }
 
-.user {
+.item {
   padding:6px;
   cursor:pointer;
   border-radius:5px;
 }
 
-.user:hover {
-  background:#333;
-}
+.item:hover { background:#333; }
 
 /* CHAT */
 #chat {
@@ -75,12 +70,12 @@ body {
   flex-direction:column;
 }
 
-#chatHeader {
+#topBar {
   padding:10px;
-  background:#1a1a1a;
+  background:#111;
   border-bottom:1px solid #333;
-  font-size:14px;
-  color:#bbb;
+  display:flex;
+  justify-content:space-between;
 }
 
 #messages {
@@ -89,43 +84,26 @@ body {
   padding:10px;
 }
 
-.msg {
-  margin:5px 0;
-}
-
-.msg b {
-  color:#4cafef;
-}
-
-/* INPUT */
 #inputArea {
   display:flex;
   padding:10px;
   background:#222;
-  gap:10px;
 }
 
 input {
   flex:1;
   padding:10px;
-  border-radius:5px;
   border:none;
   background:#111;
   color:white;
-  outline:none;
 }
 
 button {
   padding:10px 15px;
   background:#2ecc71;
   border:none;
-  border-radius:5px;
   color:white;
   cursor:pointer;
-}
-
-button:hover {
-  background:#27ae60;
 }
 </style>
 </head>
@@ -134,7 +112,9 @@ button:hover {
 
 <!-- LEFT -->
 <div id="servers">
-  <div class="dmBtn" onclick="openDMList()">DM</div>
+  <div class="btn" onclick="openDMs()">DM</div>
+  <div class="btn" onclick="createGroup()">+</div>
+  <div id="groupList"></div>
 </div>
 
 <!-- USERS -->
@@ -145,26 +125,30 @@ button:hover {
 
 <!-- CHAT -->
 <div id="chat">
-  <div id="chatHeader">Select a user</div>
+
+  <div id="topBar">
+    <div id="title">Select</div>
+    <button onclick="send()">Send</button>
+  </div>
+
   <div id="messages"></div>
 
   <div id="inputArea">
-    <input id="msg" placeholder="Message...">
-    <button onclick="send()">Send</button>
+    <input id="msg">
   </div>
+
 </div>
 
 <script>
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 const user = localStorage.getItem("user");
 
-if (!user) location.href = "index.html";
-
 let allUsers = [];
 let currentDM = null;
+let currentGroup = null;
 
-// ===================== USERS =====================
-async function loadAllUsers() {
+// ================= USERS =================
+async function loadUsers() {
   const res = await fetch(API + "/users");
   const data = await res.json();
 
@@ -174,88 +158,130 @@ async function loadAllUsers() {
 
 function renderUsers(list) {
   document.getElementById("panelList").innerHTML =
-    list.map(u =>
-      `<div class="user" onclick="openDM('${escapeHtml(u)}')">${escapeHtml(u)}</div>`
-    ).join("");
+    list.map(u => `<div class="item" onclick="openDM('${u}')">${u}</div>`).join("");
 }
 
 function filterUsers() {
-  const q = document.getElementById("searchUser").value.toLowerCase();
+  const q = searchUser.value.toLowerCase();
   renderUsers(allUsers.filter(u => u.toLowerCase().includes(q)));
 }
 
-// ===================== DM =====================
+// ================= DM =================
 function openDM(u) {
   currentDM = u;
-  document.getElementById("chatHeader").textContent = "DM with " + u;
+  currentGroup = null;
+  title.innerText = "DM: " + u;
   loadMessages();
 }
 
-async function send() {
-  const input = document.getElementById("msg");
-  const text = input.value.trim();
-  if (!text || !currentDM) return;
-
-  await fetch(API + "/dm/send", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({
-      from:user,
-      to:currentDM,
-      text
-    })
-  });
-
-  input.value = "";
-}
-
-// ===================== LOAD MESSAGES =====================
-async function loadMessages() {
-  if (!currentDM) return;
-
-  const res = await fetch(API + "/dm/get", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ username:user })
-  });
-
-  const dms = await res.json();
-
-  const filtered = dms.filter(m =>
-    (m.from === user && m.to === currentDM) ||
-    (m.from === currentDM && m.to === user)
-  );
-
-  const box = document.getElementById("messages");
-
-  box.innerHTML = filtered.map(m =>
-    `<div class="msg"><b>${escapeHtml(m.from)}:</b> ${escapeHtml(m.text)}</div>`
-  ).join("");
-
-  box.scrollTop = box.scrollHeight;
-}
-
-// ===================== OPEN DM LIST =====================
-function openDMList() {
+function openDMs() {
   currentDM = null;
-  document.getElementById("chatHeader").textContent = "Direct Messages";
-  loadAllUsers();
+  currentGroup = null;
+  title.innerText = "Direct Messages";
+  loadUsers();
 }
 
-// ===================== SAFE TEXT =====================
-function escapeHtml(str) {
-  return str
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+// ================= GROUPS =================
+async function createGroup() {
+  const name = prompt("Group name?");
+  if (!name) return;
+
+  await fetch(API + "/group/create", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ name, user })
+  });
+
+  loadGroups();
 }
 
-// ===================== INIT =====================
+async function loadGroups() {
+  const res = await fetch(API + "/group/get", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ user })
+  });
+
+  const groups = await res.json();
+
+  groupList.innerHTML =
+    groups.map(g =>
+      `<div class="btn" onclick="openGroup('${g.name}')">${g.name[0]}</div>`
+    ).join("");
+}
+
+function openGroup(name) {
+  currentGroup = name;
+  currentDM = null;
+  title.innerText = "Group: " + name;
+  loadMessages();
+}
+
+// ================= SEND =================
+async function send() {
+  const text = msg.value.trim();
+  if (!text) return;
+
+  if (currentDM) {
+    await fetch(API + "/dm/send", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ from:user, to:currentDM, text })
+    });
+  }
+
+  if (currentGroup) {
+    await fetch(API + "/group/send", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ group:currentGroup, user, text })
+    });
+  }
+
+  msg.value = "";
+}
+
+// ================= LOAD MESSAGES =================
+async function loadMessages() {
+  if (currentDM) {
+    const res = await fetch(API + "/dm/get", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ username:user })
+    });
+
+    const dms = await res.json();
+
+    messages.innerHTML = dms
+      .filter(m =>
+        (m.from === user && m.to === currentDM) ||
+        (m.from === currentDM && m.to === user)
+      )
+      .map(m => `<p><b>${m.from}:</b> ${m.text}</p>`)
+      .join("");
+  }
+
+  if (currentGroup) {
+    const res = await fetch(API + "/group/getMessages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ group: currentGroup })
+    });
+
+    const msgs = await res.json();
+
+    messages.innerHTML = msgs
+      .map(m => `<p><b>${m.from}:</b> ${m.text}</p>`)
+      .join("");
+  }
+
+  messages.scrollTop = messages.scrollHeight;
+}
+
+// ================= INIT =================
 setInterval(loadMessages, 2000);
-loadAllUsers();
-
+loadUsers();
+loadGroups();
 </script>
 
 </body>
