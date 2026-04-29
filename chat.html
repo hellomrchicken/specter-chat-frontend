@@ -13,7 +13,7 @@ body {
   color:white;
 }
 
-/* LEFT: SERVERS */
+/* LEFT BAR */
 #servers {
   width:80px;
   background:#0a0a0a;
@@ -24,7 +24,7 @@ body {
   gap:10px;
 }
 
-.server, .dmBtn {
+.dmBtn {
   width:55px;
   height:55px;
   background:#222;
@@ -33,14 +33,13 @@ body {
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  font-weight:bold;
 }
 
-.server:hover, .dmBtn:hover {
+.dmBtn:hover {
   background:#444;
 }
 
-/* MIDDLE: USERS / CHANNELS */
+/* USERS PANEL */
 #channels {
   width:220px;
   background:#1a1a1a;
@@ -50,7 +49,6 @@ body {
 }
 
 #searchUser {
-  width:100%;
   padding:8px;
   margin-bottom:10px;
   background:#111;
@@ -81,6 +79,8 @@ body {
   padding:10px;
   background:#1a1a1a;
   border-bottom:1px solid #333;
+  font-size:14px;
+  color:#bbb;
 }
 
 #messages {
@@ -89,10 +89,19 @@ body {
   padding:10px;
 }
 
+.msg {
+  margin:5px 0;
+}
+
+.msg b {
+  color:#4cafef;
+}
+
+/* INPUT */
 #inputArea {
   display:flex;
   padding:10px;
-  background:#1a1a1a;
+  background:#222;
   gap:10px;
 }
 
@@ -103,6 +112,7 @@ input {
   border:none;
   background:#111;
   color:white;
+  outline:none;
 }
 
 button {
@@ -122,26 +132,20 @@ button:hover {
 
 <body>
 
-<!-- SERVERS + DM BUTTON -->
+<!-- LEFT -->
 <div id="servers">
   <div class="dmBtn" onclick="openDMList()">DM</div>
-  <div id="serverList"></div>
 </div>
 
-<!-- USERS / SEARCH -->
+<!-- USERS -->
 <div id="channels">
-  <h3>Direct Messages</h3>
-
-  <!-- 🔍 SEARCH BAR -->
   <input id="searchUser" placeholder="Search users..." oninput="filterUsers()">
-
   <div id="panelList"></div>
 </div>
 
 <!-- CHAT -->
 <div id="chat">
   <div id="chatHeader">Select a user</div>
-
   <div id="messages"></div>
 
   <div id="inputArea">
@@ -159,70 +163,53 @@ if (!user) location.href = "index.html";
 let allUsers = [];
 let currentDM = null;
 
-// =========================
-// LOAD USERS (FROM WORKER)
-// =========================
+// ===================== USERS =====================
 async function loadAllUsers() {
   const res = await fetch(API + "/users");
   const data = await res.json();
 
   allUsers = data.map(u => u.username).filter(u => u !== user);
-
   renderUsers(allUsers);
 }
 
 function renderUsers(list) {
   document.getElementById("panelList").innerHTML =
     list.map(u =>
-      `<div class="user" onclick="openDM('${u}')">${u}</div>`
+      `<div class="user" onclick="openDM('${escapeHtml(u)}')">${escapeHtml(u)}</div>`
     ).join("");
 }
 
-// =========================
-// SEARCH FILTER
-// =========================
 function filterUsers() {
   const q = document.getElementById("searchUser").value.toLowerCase();
-
-  const filtered = allUsers.filter(u =>
-    u.toLowerCase().includes(q)
-  );
-
-  renderUsers(filtered);
+  renderUsers(allUsers.filter(u => u.toLowerCase().includes(q)));
 }
 
-// =========================
-// OPEN DM
-// =========================
-function openDM(target) {
-  currentDM = target;
-  document.getElementById("chatHeader").textContent = "DM with " + target;
+// ===================== DM =====================
+function openDM(u) {
+  currentDM = u;
+  document.getElementById("chatHeader").textContent = "DM with " + u;
   loadMessages();
 }
 
-// =========================
-// SEND MESSAGE
-// =========================
 async function send() {
-  const text = document.getElementById("msg").value.trim();
+  const input = document.getElementById("msg");
+  const text = input.value.trim();
   if (!text || !currentDM) return;
 
   await fetch(API + "/dm/send", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({
-      from: user,
-      to: currentDM,
+      from:user,
+      to:currentDM,
       text
     })
   });
 
-  document.getElementById("msg").value = "";
+  input.value = "";
 }
 
-// =========================
-// LOAD MESSAGES
-// =========================
+// ===================== LOAD MESSAGES =====================
 async function loadMessages() {
   if (!currentDM) return;
 
@@ -239,27 +226,33 @@ async function loadMessages() {
     (m.from === currentDM && m.to === user)
   );
 
-  document.getElementById("messages").innerHTML =
-    filtered.map(m =>
-      `<p><b>${m.from}:</b> ${m.text}</p>`
-    ).join("");
-
   const box = document.getElementById("messages");
+
+  box.innerHTML = filtered.map(m =>
+    `<div class="msg"><b>${escapeHtml(m.from)}:</b> ${escapeHtml(m.text)}</div>`
+  ).join("");
+
   box.scrollTop = box.scrollHeight;
 }
 
-// =========================
-// DM LIST ENTRY POINT
-// =========================
+// ===================== OPEN DM LIST =====================
 function openDMList() {
   currentDM = null;
   document.getElementById("chatHeader").textContent = "Direct Messages";
   loadAllUsers();
 }
 
-// =========================
-// AUTO REFRESH
-// =========================
+// ===================== SAFE TEXT =====================
+function escapeHtml(str) {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+// ===================== INIT =====================
 setInterval(loadMessages, 2000);
 loadAllUsers();
 
