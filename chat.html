@@ -13,6 +13,7 @@ body {
   color:white;
 }
 
+/* LEFT: SERVERS */
 #servers {
   width:80px;
   background:#0a0a0a;
@@ -32,8 +33,14 @@ body {
   align-items:center;
   justify-content:center;
   cursor:pointer;
+  font-weight:bold;
 }
 
+.server:hover, .dmBtn:hover {
+  background:#444;
+}
+
+/* MIDDLE: USERS / CHANNELS */
 #channels {
   width:220px;
   background:#1a1a1a;
@@ -43,23 +50,37 @@ body {
 }
 
 #searchUser {
+  width:100%;
   padding:8px;
   margin-bottom:10px;
   background:#111;
   color:white;
   border:none;
   border-radius:5px;
+  outline:none;
 }
 
-.user, .channel {
+.user {
   padding:6px;
   cursor:pointer;
+  border-radius:5px;
 }
 
+.user:hover {
+  background:#333;
+}
+
+/* CHAT */
 #chat {
   flex:1;
   display:flex;
   flex-direction:column;
+}
+
+#chatHeader {
+  padding:10px;
+  background:#1a1a1a;
+  border-bottom:1px solid #333;
 }
 
 #messages {
@@ -71,27 +92,60 @@ body {
 #inputArea {
   display:flex;
   padding:10px;
-  background:#222;
+  background:#1a1a1a;
+  gap:10px;
+}
+
+input {
+  flex:1;
+  padding:10px;
+  border-radius:5px;
+  border:none;
+  background:#111;
+  color:white;
+}
+
+button {
+  padding:10px 15px;
+  background:#2ecc71;
+  border:none;
+  border-radius:5px;
+  color:white;
+  cursor:pointer;
+}
+
+button:hover {
+  background:#27ae60;
 }
 </style>
 </head>
 
 <body>
 
+<!-- SERVERS + DM BUTTON -->
 <div id="servers">
   <div class="dmBtn" onclick="openDMList()">DM</div>
   <div id="serverList"></div>
 </div>
 
+<!-- USERS / SEARCH -->
 <div id="channels">
+  <h3>Direct Messages</h3>
+
+  <!-- 🔍 SEARCH BAR -->
   <input id="searchUser" placeholder="Search users..." oninput="filterUsers()">
+
   <div id="panelList"></div>
 </div>
 
+<!-- CHAT -->
 <div id="chat">
+  <div id="chatHeader">Select a user</div>
+
   <div id="messages"></div>
+
   <div id="inputArea">
-    <input id="msg">
+    <input id="msg" placeholder="Message...">
     <button onclick="send()">Send</button>
   </div>
 </div>
@@ -100,45 +154,78 @@ body {
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 const user = localStorage.getItem("user");
 
+if (!user) location.href = "index.html";
+
 let allUsers = [];
 let currentDM = null;
 
+// =========================
+// LOAD USERS (FROM WORKER)
+// =========================
 async function loadAllUsers() {
   const res = await fetch(API + "/users");
   const data = await res.json();
 
   allUsers = data.map(u => u.username).filter(u => u !== user);
-  renderUserList(allUsers);
+
+  renderUsers(allUsers);
 }
 
-function renderUserList(list) {
+function renderUsers(list) {
   document.getElementById("panelList").innerHTML =
-    list.map(u => `<div class="user" onclick="openDM('${u}')">${u}</div>`).join("");
+    list.map(u =>
+      `<div class="user" onclick="openDM('${u}')">${u}</div>`
+    ).join("");
 }
 
+// =========================
+// SEARCH FILTER
+// =========================
 function filterUsers() {
   const q = document.getElementById("searchUser").value.toLowerCase();
-  renderUserList(allUsers.filter(u => u.toLowerCase().includes(q)));
+
+  const filtered = allUsers.filter(u =>
+    u.toLowerCase().includes(q)
+  );
+
+  renderUsers(filtered);
 }
 
-function openDM(u) {
-  currentDM = u;
+// =========================
+// OPEN DM
+// =========================
+function openDM(target) {
+  currentDM = target;
+  document.getElementById("chatHeader").textContent = "DM with " + target;
   loadMessages();
 }
 
+// =========================
+// SEND MESSAGE
+// =========================
 async function send() {
-  const text = document.getElementById("msg").value;
+  const text = document.getElementById("msg").value.trim();
+  if (!text || !currentDM) return;
 
   await fetch(API + "/dm/send", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ from:user, to:currentDM, text })
+    body: JSON.stringify({
+      from: user,
+      to: currentDM,
+      text
+    })
   });
 
   document.getElementById("msg").value = "";
 }
 
+// =========================
+// LOAD MESSAGES
+// =========================
 async function loadMessages() {
+  if (!currentDM) return;
+
   const res = await fetch(API + "/dm/get", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
@@ -153,11 +240,29 @@ async function loadMessages() {
   );
 
   document.getElementById("messages").innerHTML =
-    filtered.map(m => `<p><b>${m.from}:</b> ${m.text}</p>`).join("");
+    filtered.map(m =>
+      `<p><b>${m.from}:</b> ${m.text}</p>`
+    ).join("");
+
+  const box = document.getElementById("messages");
+  box.scrollTop = box.scrollHeight;
 }
 
+// =========================
+// DM LIST ENTRY POINT
+// =========================
+function openDMList() {
+  currentDM = null;
+  document.getElementById("chatHeader").textContent = "Direct Messages";
+  loadAllUsers();
+}
+
+// =========================
+// AUTO REFRESH
+// =========================
 setInterval(loadMessages, 2000);
 loadAllUsers();
+
 </script>
 
 </body>
