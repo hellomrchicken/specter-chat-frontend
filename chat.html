@@ -2,53 +2,104 @@
 <html>
 <head>
   <title>Specter Chat</title>
-  <link rel="icon" type="image/png" href="specter_logo_normal.png">
 
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: white;
       margin: 0;
       display: flex;
       height: 100vh;
+      font-family: Arial;
+      background: #0f0f0f;
+      color: white;
     }
 
-    #sidebar {
-      width: 250px;
+    /* SERVERS */
+    #servers {
+      width: 70px;
+      background: #0a0a0a;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .server {
+      width: 50px;
+      height: 50px;
+      background: #222;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .server:hover {
+      background: #444;
+    }
+
+    #addServer {
+      background: #2ecc71;
+    }
+
+    /* CHANNELS */
+    #channels {
+      width: 220px;
       background: #1a1a1a;
-      padding: 15px;
-      border-right: 2px solid #333;
-      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
     }
 
-    #userList p {
-      padding: 5px;
+    .channel {
+      padding: 6px;
       cursor: pointer;
       border-radius: 5px;
     }
 
-    #userList p:hover {
+    .channel:hover {
       background: #333;
     }
 
-    #main {
+    #addChannel {
+      margin-top: 10px;
+      background: #2ecc71;
+      padding: 6px;
+      border-radius: 5px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    /* CHAT */
+    #chat {
       flex: 1;
       display: flex;
       flex-direction: column;
     }
 
-    #messages, #dmMessages {
+    #chatHeader {
+      padding: 10px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+    }
+
+    #messages {
       flex: 1;
       overflow-y: auto;
       padding: 15px;
     }
 
+    #messages p {
+      margin: 5px 0;
+    }
+
     #inputArea {
       display: flex;
       padding: 10px;
-      background: #222;
-      gap: 8px;
+      background: #1a1a1a;
+      gap: 10px;
     }
 
     input {
@@ -62,39 +113,42 @@
 
     button {
       padding: 10px 15px;
-      background: #4caf50;
+      background: #2ecc71;
       border: none;
       border-radius: 5px;
       color: white;
       cursor: pointer;
     }
 
-    .msg.me {
-      text-align: right;
-      color: #4caf50;
+    button:hover {
+      background: #27ae60;
     }
   </style>
 </head>
 
 <body>
 
-<div id="sidebar">
-  <h2>Users</h2>
-  <div id="userList"></div>
-
-  <hr>
-
-  <button onclick="switchMode('public')">Public Chat</button>
-  <button onclick="switchMode('dm')">DMs</button>
-  <button onclick="logout()">Logout</button>
+<!-- SERVERS -->
+<div id="servers">
+  <div id="serverList"></div>
+  <div id="addServer" onclick="createServer()">+</div>
 </div>
 
-<div id="main">
+<!-- CHANNELS -->
+<div id="channels">
+  <h3 id="serverName">No Server</h3>
+  <div id="channelList"></div>
+  <div id="addChannel" onclick="createChannel()">+ Add Channel</div>
+</div>
+
+<!-- CHAT -->
+<div id="chat">
+  <div id="chatHeader">Select a channel</div>
+
   <div id="messages"></div>
-  <div id="dmMessages" style="display:none;"></div>
 
   <div id="inputArea">
-    <input id="msg" placeholder="Type a message...">
+    <input id="msg" placeholder="Message...">
     <button onclick="send()">Send</button>
   </div>
 </div>
@@ -102,118 +156,153 @@
 <script>
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 const user = localStorage.getItem("user");
-if (!user) window.location = "index.html";
 
-let mode = "public";
-let dmTarget = null;
+if (!user) location.href = "index.html";
 
-function escapeHTML(str) {
-  return str.replace(/[&<>"']/g, c => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  }[c]));
+let currentServer = null;
+let currentChannel = null;
+
+// =========================
+// LOAD SERVERS
+// =========================
+async function loadServers() {
+  const res = await fetch(API + "/server/get", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ user })
+  });
+
+  const servers = await res.json();
+
+  document.getElementById("serverList").innerHTML =
+    servers.map(s =>
+      `<div class="server" onclick="openServer('${s.name}')">${s.name[0].toUpperCase()}</div>`
+    ).join("");
 }
 
-function switchMode(m) {
-  mode = m;
-  document.getElementById("messages").style.display = m === "public" ? "block" : "none";
-  document.getElementById("dmMessages").style.display = m === "dm" ? "block" : "none";
+// =========================
+// OPEN SERVER
+// =========================
+async function openServer(name) {
+  currentServer = name;
+  currentChannel = null;
+
+  document.getElementById("serverName").textContent = name;
+
+  const res = await fetch(API + "/channel/get", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ server: name })
+  });
+
+  const channels = await res.json();
+
+  document.getElementById("channelList").innerHTML =
+    channels.map(c =>
+      `<div class="channel" onclick="openChannel('${c.name}')"># ${c.name}</div>`
+    ).join("");
 }
 
-function logout() {
-  localStorage.removeItem("user");
-  window.location = "index.html";
+// =========================
+// OPEN CHANNEL
+// =========================
+function openChannel(name) {
+  currentChannel = name;
+  document.getElementById("chatHeader").textContent = "#" + name;
+  loadMessages();
 }
 
-async function loadUsers() {
-  const res = await fetch(API + "/messages");
-  const msgs = await res.json();
-  const users = [...new Set(msgs.map(m => m.username))].filter(u => u !== user);
-
-  document.getElementById("userList").innerHTML =
-    users.map(u => `<p onclick="openDM('${u}')">${escapeHTML(u)}</p>`).join("");
-}
-
-function openDM(target) {
-  dmTarget = target;
-  switchMode("dm");
-}
-
+// =========================
+// SEND MESSAGE
+// =========================
 async function send() {
   const input = document.getElementById("msg");
   const text = input.value.trim();
-  if (!text) return;
+  if (!text || !currentChannel) return;
 
-  if (mode === "public") {
-    await fetch(API + "/send", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ username:user, text })
-    });
-  } else {
-    await fetch(API + "/dm/send", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ from:user, to:dmTarget, text })
-    });
-  }
+  await fetch(API + "/channel/send", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      server: currentServer,
+      channel: currentChannel,
+      user,
+      text
+    })
+  });
 
   input.value = "";
 }
 
+// =========================
+// LOAD MESSAGES
+// =========================
 async function loadMessages() {
-  if (mode !== "public") return;
+  if (!currentChannel) return;
 
-  const res = await fetch(API + "/messages");
+  const res = await fetch(API + "/channel/getMessages", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      server: currentServer,
+      channel: currentChannel
+    })
+  });
+
   const msgs = await res.json();
 
-  document.getElementById("messages").innerHTML =
+  const box = document.getElementById("messages");
+
+  box.innerHTML =
     msgs.map(m =>
-      `<p class="${m.username === user ? 'msg me' : 'msg'}">
-        <b>${escapeHTML(m.username)}:</b> ${escapeHTML(m.text)}
-      </p>`
+      `<p><b>${m.from}:</b> ${m.text}</p>`
     ).join("");
 
-  // auto scroll
-  const box = document.getElementById("messages");
   box.scrollTop = box.scrollHeight;
 }
 
-async function loadDMs() {
-  if (mode !== "dm" || !dmTarget) return;
+// =========================
+// CREATE SERVER
+// =========================
+async function createServer() {
+  const name = prompt("Server name?");
+  if (!name) return;
 
-  const res = await fetch(API + "/dm/get", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ username:user })
+  await fetch(API + "/server/create", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ name, user })
   });
 
-  const dms = await res.json();
-
-  const filtered = dms.filter(m =>
-    (m.from === user && m.to === dmTarget) ||
-    (m.from === dmTarget && m.to === user)
-  );
-
-  document.getElementById("dmMessages").innerHTML =
-    filtered.map(m =>
-      `<p class="${m.from === user ? 'msg me' : 'msg'}">
-        <b>${escapeHTML(m.from)}:</b> ${escapeHTML(m.text)}
-      </p>`
-    ).join("");
+  loadServers();
 }
 
-setInterval(() => {
-  loadMessages();
-  loadDMs();
-  loadUsers();
-}, 2000);
+// =========================
+// CREATE CHANNEL
+// =========================
+async function createChannel() {
+  if (!currentServer) return alert("Select a server first");
 
-loadMessages();
-loadUsers();
+  const name = prompt("Channel name?");
+  if (!name) return;
+
+  await fetch(API + "/channel/create", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      name,
+      server: currentServer
+    })
+  });
+
+  openServer(currentServer);
+}
+
+// =========================
+// AUTO REFRESH
+// =========================
+setInterval(loadMessages, 2000);
+loadServers();
 </script>
 
 </body>
