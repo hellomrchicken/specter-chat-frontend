@@ -50,7 +50,6 @@ body {
 }
 
 #searchUser {
-  width:100%;
   height:26px;
   padding:4px 8px;
   margin-bottom:10px;
@@ -88,11 +87,6 @@ body {
   align-items:center;
 }
 
-#title {
-  font-size:13px;
-  color:#b5bac1;
-}
-
 #messages {
   flex:1;
   overflow-y:auto;
@@ -103,94 +97,98 @@ body {
   display:flex;
   padding:10px;
   background:#2b2d31;
-  border-top:1px solid #1e1f22;
 }
 
-input[type="text"] {
+#msg {
   flex:1;
   padding:10px;
   border:none;
   background:#1e1f22;
   color:white;
   border-radius:6px;
-  outline:none;
 }
 
 button {
   margin-left:10px;
-  padding:10px 15px;
+  padding:10px;
   background:#5865f2;
   border:none;
   border-radius:6px;
   color:white;
   cursor:pointer;
 }
-
-button:hover {
-  background:#4752c4;
-}
 </style>
 </head>
 
 <body>
 
-<!-- LEFT -->
 <div id="servers">
   <div class="btn" onclick="openDMs()">DM</div>
   <div class="btn" onclick="createGroup()">+</div>
   <div id="groupList"></div>
 </div>
 
-<!-- USERS -->
 <div id="channels">
   <input id="searchUser" placeholder="Search users..." oninput="filterUsers()">
   <div id="panelList"></div>
 </div>
 
-<!-- CHAT -->
 <div id="chat">
-
   <div id="topBar">
-@@ -173,159 +170,166 @@
+    <span id="title">Select a chat</span>
+    <button onclick="send()">Send</button>
+  </div>
+
+  <div id="messages"></div>
+
+  <div id="inputArea">
+    <input id="msg" placeholder="Message...">
+  </div>
+</div>
+
+<script>
+const API = "https://specter-chat-api.spectercat78.workers.dev";
+const user = localStorage.getItem("user");
+
+if (!user) location.href = "index.html";
+
+let allUsers = [];
 let currentDM = null;
 let currentGroup = null;
 
-// DOM refs
 const messages = document.getElementById("messages");
 const title = document.getElementById("title");
 const groupList = document.getElementById("groupList");
+const msgInput = document.getElementById("msg");
 
-// ================= SECRET COMMAND =================
-// ================= SECRET =================
-function handleSecrets(text) {
-  if (text.trim().toLowerCase() === "!spyglass") {
-    return "PARROT... I AM WIFES";
-  }
-  return text;
-}
-
-// ================= ENTER TO SEND (FIXED) =================
-document.getElementById("msg").addEventListener("keydown", function(e) {
+// ✅ ENTER TO SEND (correct place)
+msgInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     send();
   }
 });
 
-// ================= USERS =================
+// SECRET COMMAND
+function handleSecrets(text) {
+  if (text.toLowerCase() === "!spyglass") {
+    return "PARROT... I AM WIFES";
+  }
+  return text;
+}
+
+// USERS
 async function loadUsers() {
   const res = await fetch(API + "/users");
   const data = await res.json();
-
   allUsers = data.map(u => u.username).filter(u => u !== user);
   renderUsers(allUsers);
 }
 
 function renderUsers(list) {
-  document.getElementById("panelList").innerHTML =
-    list.map(u =>
-      `<div class="item" onclick="openDM('${u}')">${u}</div>`
-    ).join("");
+  panelList.innerHTML = list.map(u =>
+    `<div class="item" onclick="openDM('${u}')">${u}</div>`
+  ).join("");
 }
 
 function filterUsers() {
@@ -198,7 +196,7 @@ function filterUsers() {
   renderUsers(allUsers.filter(u => u.toLowerCase().includes(q)));
 }
 
-// ================= DM =================
+// DM
 function openDM(u) {
   currentDM = u;
   currentGroup = null;
@@ -207,13 +205,11 @@ function openDM(u) {
 }
 
 function openDMs() {
-  currentDM = null;
-  currentGroup = null;
   title.innerText = "Direct Messages";
   loadUsers();
 }
 
-// ================= GROUPS =================
+// GROUPS
 async function createGroup() {
   const name = prompt("Group name?");
   if (!name) return;
@@ -236,10 +232,9 @@ async function loadGroups() {
 
   const groups = await res.json();
 
-  groupList.innerHTML =
-    groups.map(g =>
-      `<div class="btn" onclick="openGroup('${g.name}')">${g.name[0]}</div>`
-    ).join("");
+  groupList.innerHTML = groups.map(g =>
+    `<div class="btn" onclick="openGroup('${g.name}')">${g.name[0]}</div>`
+  ).join("");
 }
 
 function openGroup(name) {
@@ -249,9 +244,9 @@ function openGroup(name) {
   loadMessages();
 }
 
-// ================= SEND =================
+// SEND
 async function send() {
-  const raw = document.getElementById("msg").value.trim();
+  const raw = msgInput.value.trim();
   if (!raw) return;
 
   const text = handleSecrets(raw);
@@ -272,10 +267,10 @@ async function send() {
     });
   }
 
-  document.getElementById("msg").value = "";
+  msgInput.value = "";
 }
 
-// ================= MESSAGES =================
+// LOAD MESSAGES
 async function loadMessages() {
   if (currentDM) {
     const res = await fetch(API + "/dm/get", {
@@ -312,7 +307,7 @@ async function loadMessages() {
   messages.scrollTop = messages.scrollHeight;
 }
 
-// ================= INIT =================
+// INIT
 setInterval(loadMessages, 2000);
 loadUsers();
 loadGroups();
