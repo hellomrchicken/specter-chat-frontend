@@ -9,14 +9,14 @@ body {
   display:flex;
   height:100vh;
   font-family:Arial;
-  background:#0f0f0f;
+  background:#1e1f22; /* dark grey base */
   color:white;
 }
 
 /* LEFT BAR */
 #servers {
   width:80px;
-  background:#0a0a0a;
+  background:#111214;
   padding:10px;
   display:flex;
   flex-direction:column;
@@ -27,32 +27,44 @@ body {
 .btn {
   width:55px;
   height:55px;
-  background:#222;
-  border-radius:15px;
+  background:#2b2d31;
+  border-radius:14px;
   display:flex;
   align-items:center;
   justify-content:center;
   cursor:pointer;
+  transition:0.2s;
 }
 
-.btn:hover { background:#444; }
+.btn:hover {
+  background:#5865f2; /* neon blue */
+}
 
 /* SIDE PANEL */
 #channels {
   width:220px;
-  background:#1a1a1a;
+  background:#2b2d31;
   padding:10px;
   display:flex;
   flex-direction:column;
+  border-right:1px solid #1e1f22;
 }
 
+/* SEARCH BAR */
 #searchUser {
-  padding:8px;
+  padding:6px 8px;
   margin-bottom:10px;
-  background:#111;
+  background:#1e1f22;
   color:white;
-  border:none;
-  border-radius:5px;
+  border:1px solid #111214;
+  border-radius:6px;
+  outline:none;
+  font-size:12px;
+  height:28px;
+}
+
+#searchUser:focus {
+  border:1px solid #5865f2;
 }
 
 .item {
@@ -61,7 +73,9 @@ body {
   border-radius:5px;
 }
 
-.item:hover { background:#333; }
+.item:hover {
+  background:#404249;
+}
 
 /* CHAT */
 #chat {
@@ -72,10 +86,16 @@ body {
 
 #topBar {
   padding:10px;
-  background:#111;
-  border-bottom:1px solid #333;
+  background:#2b2d31;
+  border-bottom:1px solid #1e1f22;
   display:flex;
   justify-content:space-between;
+  align-items:center;
+}
+
+#title {
+  font-size:14px;
+  color:#b5bac1;
 }
 
 #messages {
@@ -84,33 +104,48 @@ body {
   padding:10px;
 }
 
+#messages p {
+  margin:5px 0;
+}
+
+/* INPUT */
 #inputArea {
   display:flex;
   padding:10px;
-  background:#222;
+  background:#2b2d31;
+  border-top:1px solid #1e1f22;
 }
 
 input {
   flex:1;
   padding:10px;
   border:none;
-  background:#111;
+  background:#1e1f22;
   color:white;
+  border-radius:6px;
+  outline:none;
 }
 
 button {
+  margin-left:10px;
   padding:10px 15px;
-  background:#2ecc71;
+  background:#5865f2; /* neon blue */
   border:none;
+  border-radius:6px;
   color:white;
   cursor:pointer;
+  transition:0.2s;
+}
+
+button:hover {
+  background:#4752c4;
 }
 </style>
 </head>
 
 <body>
 
-<!-- LEFT -->
+<!-- LEFT BAR -->
 <div id="servers">
   <div class="btn" onclick="openDMs()">DM</div>
   <div class="btn" onclick="createGroup()">+</div>
@@ -127,14 +162,14 @@ button {
 <div id="chat">
 
   <div id="topBar">
-    <div id="title">Select</div>
+    <div id="title">Select a chat</div>
     <button onclick="send()">Send</button>
   </div>
 
   <div id="messages"></div>
 
   <div id="inputArea">
-    <input id="msg">
+    <input id="msg" placeholder="Message...">
   </div>
 
 </div>
@@ -142,6 +177,8 @@ button {
 <script>
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 const user = localStorage.getItem("user");
+
+if (!user) location.href = "index.html";
 
 let allUsers = [];
 let currentDM = null;
@@ -158,7 +195,9 @@ async function loadUsers() {
 
 function renderUsers(list) {
   document.getElementById("panelList").innerHTML =
-    list.map(u => `<div class="item" onclick="openDM('${u}')">${u}</div>`).join("");
+    list.map(u =>
+      `<div class="item" onclick="openDM('${u}')">${u}</div>`
+    ).join("");
 }
 
 function filterUsers() {
@@ -241,7 +280,7 @@ async function send() {
   msg.value = "";
 }
 
-// ================= LOAD MESSAGES =================
+// ================= MESSAGES =================
 async function loadMessages() {
   if (currentDM) {
     const res = await fetch(API + "/dm/get", {
