@@ -33,7 +33,6 @@ body {
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  transition:0.2s;
 }
 
 .btn:hover {
@@ -50,7 +49,6 @@ body {
   border-right:1px solid #1e1f22;
 }
 
-/* 🔍 SEARCH (SMALL + FLAT) */
 #searchUser {
   width:100%;
   height:26px;
@@ -108,11 +106,6 @@ body {
   padding:10px;
 }
 
-#messages p {
-  margin:5px 0;
-}
-
-/* INPUT */
 #inputArea {
   display:flex;
   padding:10px;
@@ -138,7 +131,6 @@ button {
   border-radius:6px;
   color:white;
   cursor:pointer;
-  transition:0.2s;
 }
 
 button:hover {
@@ -187,6 +179,19 @@ if (!user) location.href = "index.html";
 let allUsers = [];
 let currentDM = null;
 let currentGroup = null;
+
+// ================= EASTER EGG =================
+function spyglass(text) {
+  if (text.trim() === "!spyglass") {
+    return "PARROT... I AM WIFES";
+  }
+  return text;
+}
+
+// ================= ELEMENT FIX =================
+const messages = document.getElementById("messages");
+const title = document.getElementById("title");
+const groupList = document.getElementById("groupList");
 
 // ================= USERS =================
 async function loadUsers() {
@@ -262,8 +267,10 @@ function openGroup(name) {
 
 // ================= SEND =================
 async function send() {
-  const text = msg.value.trim();
-  if (!text) return;
+  const raw = msg.value.trim();
+  if (!raw) return;
+
+  const text = spyglass(raw);
 
   if (currentDM) {
     await fetch(API + "/dm/send", {
