@@ -134,46 +134,33 @@ button:hover {
 
 <body>
 
+<!-- LEFT -->
 <div id="servers">
   <div class="btn" onclick="openDMs()">DM</div>
   <div class="btn" onclick="createGroup()">+</div>
   <div id="groupList"></div>
 </div>
 
+<!-- USERS -->
 <div id="channels">
   <input id="searchUser" placeholder="Search users..." oninput="filterUsers()">
   <div id="panelList"></div>
 </div>
 
+<!-- CHAT -->
 <div id="chat">
 
   <div id="topBar">
-    <div id="title">Select a chat</div>
-    <button onclick="send()">Send</button>
-  </div>
-
-  <div id="messages"></div>
-
-  <div id="inputArea">
-    <input id="msg" type="text" placeholder="Message...">
-  </div>
-
-</div>
-
-<script>
-const API = "https://specter-chat-api.spectercat78.workers.dev";
-const user = localStorage.getItem("user");
-
-if (!user) location.href = "index.html";
-
-let allUsers = [];
+@@ -173,159 +170,166 @@
 let currentDM = null;
 let currentGroup = null;
 
+// DOM refs
 const messages = document.getElementById("messages");
 const title = document.getElementById("title");
 const groupList = document.getElementById("groupList");
 
+// ================= SECRET COMMAND =================
 // ================= SECRET =================
 function handleSecrets(text) {
   if (text.trim().toLowerCase() === "!spyglass") {
