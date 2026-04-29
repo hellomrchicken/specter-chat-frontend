@@ -134,20 +134,17 @@ button:hover {
 
 <body>
 
-<!-- LEFT -->
 <div id="servers">
   <div class="btn" onclick="openDMs()">DM</div>
   <div class="btn" onclick="createGroup()">+</div>
   <div id="groupList"></div>
 </div>
 
-<!-- USERS -->
 <div id="channels">
   <input id="searchUser" placeholder="Search users..." oninput="filterUsers()">
   <div id="panelList"></div>
 </div>
 
-<!-- CHAT -->
 <div id="chat">
 
   <div id="topBar">
@@ -173,18 +170,25 @@ let allUsers = [];
 let currentDM = null;
 let currentGroup = null;
 
-// DOM refs
 const messages = document.getElementById("messages");
 const title = document.getElementById("title");
 const groupList = document.getElementById("groupList");
 
-// ================= SECRET COMMAND =================
+// ================= SECRET =================
 function handleSecrets(text) {
   if (text.trim().toLowerCase() === "!spyglass") {
     return "PARROT... I AM WIFES";
   }
   return text;
 }
+
+// ================= ENTER TO SEND (FIXED) =================
+document.getElementById("msg").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    send();
+  }
+});
 
 // ================= USERS =================
 async function loadUsers() {
