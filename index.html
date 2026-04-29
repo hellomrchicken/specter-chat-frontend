@@ -42,7 +42,12 @@
       cursor: pointer;
     }
 
-    button:hover {
+    button:disabled {
+      background: #777;
+      cursor: not-allowed;
+    }
+
+    button:hover:not(:disabled) {
       background: #45a049;
     }
 
@@ -55,19 +60,114 @@
 </head>
 <body>
 
-  <div id="box">
-    <h2>Specter Chat</h2>
+<div id="box">
+  <h2>Specter Chat</h2>
 
-    <input id="username" placeholder="Username">
-    <input id="password" type="password" placeholder="Password">
+  <input id="username" placeholder="Username">
+  <input id="password" type="password" placeholder="Password">
 
-    <button onclick="login()">Login</button>
-    <button onclick="signup()">Sign Up</button>
+  <button id="loginBtn" onclick="login()">Login</button>
+  <button id="signupBtn" onclick="signup()">Sign Up</button>
 
-    <p id="status"></p>
-  </div>
+  <p id="status"></p>
+</div>
 
-  <script src="script.js"></script>
+<script>
+const API = "https://specter-chat-api.spectercat78.workers.dev";
+
+let cooldown = false;
+
+function setLoading(state, message = "") {
+  document.getElementById("loginBtn").disabled = state;
+  document.getElementById("signupBtn").disabled = state;
+  document.getElementById("status").textContent = message;
+}
+
+function startCooldown() {
+  cooldown = true;
+  setTimeout(() => cooldown = false, 3000); // 3 sec anti-spam
+}
+
+async function login() {
+  if (cooldown) return;
+
+  const username = usernameInput();
+  const password = passwordInput();
+
+  if (!username || !password) {
+    setLoading(false, "Enter username & password");
+    return;
+  }
+
+  setLoading(true, "Please be patient...");
+
+  try {
+    const res = await fetch(API + "/login", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      localStorage.setItem("user", username);
+      window.location = "chat.html";
+    } else {
+      setLoading(false, "Invalid login");
+      startCooldown();
+    }
+
+  } catch {
+    setLoading(false, "Network error");
+    startCooldown();
+  }
+}
+
+async function signup() {
+  if (cooldown) return;
+
+  const username = usernameInput();
+  const password = passwordInput();
+
+  if (!username || !password) {
+    setLoading(false, "Enter username & password");
+    return;
+  }
+
+  setLoading(true, "Please be patient... Do not spam Sign Up");
+
+  try {
+    const res = await fetch(API + "/signup", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      setLoading(false, "Account created! You can log in.");
+    } else {
+      setLoading(false, data.error || "Signup failed");
+    }
+
+    startCooldown();
+
+  } catch {
+    setLoading(false, "Network error");
+    startCooldown();
+  }
+}
+
+function usernameInput() {
+  return document.getElementById("username").value.trim();
+}
+
+function passwordInput() {
+  return document.getElementById("password").value.trim();
+}
+</script>
 
 </body>
 </html>
