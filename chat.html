@@ -39,7 +39,7 @@ body {
   background:#5865f2;
 }
 
-/* SIDE PANEL */
+/* USERS */
 #channels {
   width:220px;
   background:#2b2d31;
@@ -54,19 +54,12 @@ body {
   height:26px;
   padding:4px 8px;
   margin-bottom:10px;
-
   background:#1e1f22;
   color:white;
-
   border:none;
   border-radius:4px;
-
   font-size:11px;
   outline:none;
-}
-
-#searchUser:focus {
-  box-shadow:0 0 0 1px #5865f2;
 }
 
 .item {
@@ -180,18 +173,18 @@ let allUsers = [];
 let currentDM = null;
 let currentGroup = null;
 
-// ================= EASTER EGG =================
-function spyglass(text) {
-  if (text.trim() === "!spyglass") {
+// DOM refs
+const messages = document.getElementById("messages");
+const title = document.getElementById("title");
+const groupList = document.getElementById("groupList");
+
+// ================= SECRET COMMAND =================
+function handleSecrets(text) {
+  if (text.trim().toLowerCase() === "!spyglass") {
     return "PARROT... I AM WIFES";
   }
   return text;
 }
-
-// ================= ELEMENT FIX =================
-const messages = document.getElementById("messages");
-const title = document.getElementById("title");
-const groupList = document.getElementById("groupList");
 
 // ================= USERS =================
 async function loadUsers() {
@@ -267,10 +260,10 @@ function openGroup(name) {
 
 // ================= SEND =================
 async function send() {
-  const raw = msg.value.trim();
+  const raw = document.getElementById("msg").value.trim();
   if (!raw) return;
 
-  const text = spyglass(raw);
+  const text = handleSecrets(raw);
 
   if (currentDM) {
     await fetch(API + "/dm/send", {
@@ -288,7 +281,7 @@ async function send() {
     });
   }
 
-  msg.value = "";
+  document.getElementById("msg").value = "";
 }
 
 // ================= MESSAGES =================
