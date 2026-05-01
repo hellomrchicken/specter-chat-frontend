@@ -1,112 +1,66 @@
-console.log("SCRIPT LOADED");
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 
-// ================= HELPERS =================
-function getUsername() {
+const status = document.getElementById("status");
+
+function getUser() {
   return document.getElementById("username").value.trim();
 }
 
-function getPassword() {
+function getPass() {
   return document.getElementById("password").value.trim();
 }
 
-function setStatus(msg, good = false) {
-  const el = document.getElementById("status");
-  el.style.color = good ? "#66ff66" : "#ff6666";
-  el.innerText = msg;
+function set(msg, ok = false) {
+  status.style.color = ok ? "lightgreen" : "red";
+  status.innerText = msg;
 }
 
 // ================= SIGNUP =================
 async function signup() {
-  const username = getUsername();
-  const password = getPassword();
+  const username = getUser();
+  const password = getPass();
 
-  if (!username || !password) {
-    setStatus("Enter username & password");
-    return;
-  }
+  if (!username || !password) return set("Fill in all fields");
 
-  setStatus("Creating account...");
+  set("Signing up...");
 
-  try {
-    const res = await fetch(API + "/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
-    });
+  const res = await fetch(API + "/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
 
-    console.log("SIGNUP STATUS:", res.status);
+  const data = await res.json();
 
-    const text = await res.text();
-    console.log("SIGNUP RAW:", text);
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      setStatus("Bad server response");
-      return;
-    }
-
-    if (data.success) {
-      setStatus("Account created! You can log in.", true);
-    } else {
-      setStatus(data.error || "Signup failed");
-    }
-
-  } catch (err) {
-    console.error(err);
-    setStatus("Network error");
-  }
+  if (data.success) set("Account created!", true);
+  else set(data.error || "Signup failed");
 }
 
 // ================= LOGIN =================
 async function login() {
-  const username = getUsername();
-  const password = getPassword();
+  const username = getUser();
+  const password = getPass();
 
-  if (!username || !password) {
-    setStatus("Enter username & password");
-    return;
-  }
+  if (!username || !password) return set("Fill in all fields");
 
-  setStatus("Logging in...");
+  set("Logging in...");
 
-  try {
-    const res = await fetch(API + "/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
-    });
+  const res = await fetch(API + "/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
 
-    console.log("LOGIN STATUS:", res.status);
+  const data = await res.json();
 
-    const text = await res.text();
-    console.log("LOGIN RAW:", text);
+  if (data.success) {
+    localStorage.setItem("user", username);
+    set("Success!", true);
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      setStatus("Server returned invalid JSON");
-      return;
-    }
-
-    console.log("LOGIN PARSED:", data);
-
-    if (data.success) {
-      setStatus("Success! Redirecting...", true);
-      localStorage.setItem("user", username);
-
-      setTimeout(() => {
-        window.location = "chat.html";
-      }, 500);
-    } else {
-      setStatus("Invalid username or password");
-    }
-
-  } catch (err) {
-    console.error(err);
-    setStatus("Network error");
+    setTimeout(() => {
+      window.location = "chat.html";
+    }, 500);
+  } else {
+    set("Invalid username or password");
   }
 }
