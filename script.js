@@ -1,3 +1,4 @@
+console.log("SCRIPT LOADED");
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 
 // ================= HELPERS =================
