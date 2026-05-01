@@ -2,6 +2,7 @@
 <html>
 <head>
 <title>Specter Chat</title>
+
 <style>
 body {
   margin:0;
@@ -11,12 +12,33 @@ body {
   background:#1e1f22;
   color:white;
 }
+
 #servers { width:80px; background:#111; padding:10px; }
 #channels { width:220px; background:#2b2d31; padding:10px; }
+
 #chat { flex:1; display:flex; flex-direction:column; }
-#messages { flex:1; overflow-y:auto; padding:10px; }
-#inputArea { display:flex; padding:10px; }
-#msg { flex:1; padding:10px; }
+
+#messages {
+  flex:1;
+  overflow-y:auto;
+  padding:10px;
+}
+
+#inputArea {
+  display:flex;
+  padding:10px;
+}
+
+#msg {
+  flex:1;
+  padding:10px;
+  border:none;
+  outline:none;
+}
+
+button {
+  margin-left:10px;
+}
 </style>
 </head>
 
@@ -36,6 +58,7 @@ body {
 <div id="chat">
   <div id="title">Select a chat</div>
   <div id="messages"></div>
+
   <div id="inputArea">
     <input id="msg">
     <button onclick="send()">Send</button>
@@ -58,6 +81,24 @@ let allUsers = [];
 let currentDM = null;
 let currentGroup = null;
 
+// ================= SAFE FETCH (IMPORTANT FIX) =================
+async function safeFetch(url, options) {
+  try {
+    const res = await fetch(url, options);
+    const text = await res.text();
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.log("❌ NON-JSON RESPONSE:", text);
+      return null;
+    }
+  } catch (err) {
+    console.log("❌ NETWORK ERROR:", err);
+    return null;
+  }
+}
+
 // ENTER SEND
 msgInput.addEventListener("keydown", e => {
   if (e.key === "Enter") send();
@@ -65,8 +106,10 @@ msgInput.addEventListener("keydown", e => {
 
 // USERS
 async function loadUsers() {
-  const res = await fetch(API + "/users");
-  const data = await res.json();
+  const data = await safeFetch(API + "/users");
+
+  if (!data) return;
+
   allUsers = data.map(u => u.username).filter(u => u !== user);
   renderUsers(allUsers);
 }
@@ -81,6 +124,7 @@ function renderUsers(list) {
 function openDM(u) {
   currentDM = u;
   currentGroup = null;
+  document.getElementById("title").innerText = "DM: " + u;
   loadMessages();
 }
 
@@ -93,7 +137,7 @@ async function createGroup() {
   const name = prompt("Group name?");
   if (!name) return;
 
-  await fetch(API + "/group/create", {
+  await safeFetch(API + "/group/create", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({ name, user })
@@ -103,13 +147,13 @@ async function createGroup() {
 }
 
 async function loadGroups() {
-  const res = await fetch(API + "/group/get", {
+  const groups = await safeFetch(API + "/group/get", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({ user })
   });
 
-  const groups = await res.json();
+  if (!groups) return;
 
   groupList.innerHTML = groups.map(g =>
     `<div onclick="openGroup('${g.name}')">${g.name}</div>`
@@ -119,6 +163,7 @@ async function loadGroups() {
 function openGroup(name) {
   currentGroup = name;
   currentDM = null;
+  document.getElementById("title").innerText = "Group: " + name;
   loadMessages();
 }
 
@@ -128,7 +173,7 @@ async function send() {
   if (!text) return;
 
   if (currentDM) {
-    await fetch(API + "/dm/send", {
+    await safeFetch(API + "/dm/send", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ from:user, to:currentDM, text })
@@ -136,7 +181,7 @@ async function send() {
   }
 
   if (currentGroup) {
-    await fetch(API + "/group/send", {
+    await safeFetch(API + "/group/send", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ group:currentGroup, user, text })
@@ -147,16 +192,16 @@ async function send() {
   loadMessages();
 }
 
-// LOAD
+// LOAD MESSAGES
 async function loadMessages() {
   if (currentDM) {
-    const res = await fetch(API + "/dm/get", {
+    const dms = await safeFetch(API + "/dm/get", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ username:user })
     });
 
-    const dms = await res.json();
+    if (!dms) return;
 
     messages.innerHTML = dms
       .filter(m =>
@@ -168,13 +213,13 @@ async function loadMessages() {
   }
 
   if (currentGroup) {
-    const res = await fetch(API + "/group/getMessages", {
+    const msgs = await safeFetch(API + "/group/getMessages", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ group:currentGroup })
+      body: JSON.stringify({ group: currentGroup })
     });
 
-    const msgs = await res.json();
+    if (!msgs) return;
 
     messages.innerHTML = msgs
       .map(m => `<p><b>${m.from}:</b> ${m.text}</p>`)
