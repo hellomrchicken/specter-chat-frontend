@@ -11,12 +11,87 @@ body {
   font-family:Arial;
   background:#1e1f22;
   color:white;
+  overflow:hidden;
 }
 
-#servers { width:80px; background:#111; padding:10px; }
-#channels { width:220px; background:#2b2d31; padding:10px; }
+/* LEFT SERVER BAR */
+#servers {
+  width:80px;
+  background:#111;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:center;
+  overflow-y:auto;
+}
 
-#chat { flex:1; display:flex; flex-direction:column; }
+#servers div {
+  width:55px;
+  height:55px;
+  background:#2b2d31;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  user-select:none;
+}
+
+#servers div:hover {
+  background:#5865f2;
+}
+
+/* USERS */
+#channels {
+  width:220px;
+  background:#2b2d31;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+#searchUser {
+  padding:8px;
+  margin-bottom:10px;
+  background:#1e1f22;
+  border:none;
+  color:white;
+  outline:none;
+  border-radius:5px;
+}
+
+#panelList {
+  overflow-y:auto;
+  flex:1;
+}
+
+#panelList div {
+  padding:8px;
+  margin-bottom:5px;
+  background:#1e1f22;
+  border-radius:5px;
+  cursor:pointer;
+}
+
+#panelList div:hover {
+  background:#404249;
+}
+
+/* CHAT */
+#chat {
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+#title {
+  padding:10px;
+  background:#2b2d31;
+  border-bottom:1px solid #111;
+}
 
 #messages {
   flex:1;
@@ -24,9 +99,15 @@ body {
   padding:10px;
 }
 
+#messages p {
+  margin:5px 0;
+}
+
+/* INPUT */
 #inputArea {
   display:flex;
   padding:10px;
+  background:#2b2d31;
 }
 
 #msg {
@@ -34,10 +115,23 @@ body {
   padding:10px;
   border:none;
   outline:none;
+  background:#1e1f22;
+  color:white;
+  border-radius:6px;
 }
 
 button {
   margin-left:10px;
+  padding:10px 15px;
+  background:#5865f2;
+  border:none;
+  color:white;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+button:hover {
+  background:#4752c4;
 }
 </style>
 </head>
@@ -81,7 +175,7 @@ let allUsers = [];
 let currentDM = null;
 let currentGroup = null;
 
-// ================= SAFE FETCH (IMPORTANT FIX) =================
+// SAFE FETCH (prevents crash)
 async function safeFetch(url, options) {
   try {
     const res = await fetch(url, options);
@@ -90,11 +184,11 @@ async function safeFetch(url, options) {
     try {
       return JSON.parse(text);
     } catch {
-      console.log("❌ NON-JSON RESPONSE:", text);
+      console.log("NON JSON:", text);
       return null;
     }
-  } catch (err) {
-    console.log("❌ NETWORK ERROR:", err);
+  } catch (e) {
+    console.log("FETCH ERROR:", e);
     return null;
   }
 }
@@ -107,7 +201,6 @@ msgInput.addEventListener("keydown", e => {
 // USERS
 async function loadUsers() {
   const data = await safeFetch(API + "/users");
-
   if (!data) return;
 
   allUsers = data.map(u => u.username).filter(u => u !== user);
