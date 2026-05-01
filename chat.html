@@ -13,7 +13,7 @@ body {
   color:white;
 }
 
-/* FIX: clickable cursor */
+/* clickable fix */
 #servers div,
 #panelList div,
 #groupList div,
@@ -53,8 +53,6 @@ button {
 #msg {
   flex:1;
   padding:10px;
-  border:none;
-  outline:none;
 }
 </style>
 </head>
@@ -95,44 +93,41 @@ const groupList = document.getElementById("groupList");
 
 let currentDM = null;
 let currentGroup = null;
-let allUsers = [];
 
-/* ================= SAFE FETCH ================= */
 async function safeFetch(url, options) {
   try {
     const res = await fetch(url, options);
     const text = await res.text();
 
-    // handle 404 / HTML / plain text safely
     try {
       return JSON.parse(text);
     } catch {
-      console.log("❌ API ERROR:", url, text);
+      console.log("BAD RESPONSE:", text);
       return null;
     }
-  } catch (err) {
-    console.log("❌ NETWORK ERROR:", err);
+  } catch (e) {
+    console.log("NETWORK ERROR:", e);
     return null;
   }
 }
 
-/* ENTER TO SEND */
-msgInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") send();
-});
+/* FIX: missing function */
+function openDMs() {
+  currentDM = null;
+  currentGroup = null;
+  document.getElementById("title").innerText = "DMs";
+  loadUsers();
+}
 
-/* ================= USERS ================= */
 async function loadUsers() {
   const data = await safeFetch(API + "/users");
   if (!data) return;
 
-  allUsers = data.map(u => u.username).filter(u => u !== user);
-  panelList.innerHTML = allUsers.map(u =>
-    `<div onclick="openDM('${u}')">${u}</div>`
-  ).join("");
+  panelList.innerHTML = data
+    .map(u => `<div onclick="openDM('${u.username}')">${u.username}</div>`)
+    .join("");
 }
 
-/* ================= DM ================= */
 function openDM(u) {
   currentDM = u;
   currentGroup = null;
@@ -140,7 +135,6 @@ function openDM(u) {
   loadMessages();
 }
 
-/* ================= GROUP ================= */
 async function createGroup() {
   const name = prompt("Group name?");
   if (!name) return;
@@ -158,9 +152,9 @@ async function loadGroups() {
   const groups = await safeFetch(API + "/group/get");
   if (!groups) return;
 
-  groupList.innerHTML = groups.map(g =>
-    `<div onclick="openGroup('${g.name}')">${g.name}</div>`
-  ).join("");
+  groupList.innerHTML = groups
+    .map(g => `<div onclick="openGroup('${g.name}')">${g.name}</div>`)
+    .join("");
 }
 
 function openGroup(name) {
@@ -170,7 +164,6 @@ function openGroup(name) {
   loadMessages();
 }
 
-/* ================= SEND ================= */
 async function send() {
   const text = msgInput.value.trim();
   if (!text) return;
@@ -195,12 +188,10 @@ async function send() {
   loadMessages();
 }
 
-/* ================= MESSAGES ================= */
 async function loadMessages() {
   if (currentDM) {
     const dms = await safeFetch(API + "/dm/get");
-
-    if (!Array.isArray(dms)) return;
+    if (!dms) return;
 
     messages.innerHTML = dms
       .filter(m =>
@@ -213,8 +204,7 @@ async function loadMessages() {
 
   if (currentGroup) {
     const msgs = await safeFetch(API + "/group/getMessages");
-
-    if (!Array.isArray(msgs)) return;
+    if (!msgs) return;
 
     messages.innerHTML = msgs
       .map(m => `<p><b>${m.from}:</b> ${m.text}</p>`)
@@ -222,10 +212,9 @@ async function loadMessages() {
   }
 }
 
-/* ================= INIT ================= */
+setInterval(loadMessages, 3000);
 loadUsers();
 loadGroups();
-setInterval(loadMessages, 3000);
 </script>
 
 </body>
