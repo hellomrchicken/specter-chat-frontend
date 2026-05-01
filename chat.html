@@ -11,86 +11,32 @@ body {
   font-family:Arial;
   background:#1e1f22;
   color:white;
-  overflow:hidden;
 }
 
-/* LEFT SERVER BAR */
+/* FIX: clickable cursor */
+#servers div,
+#panelList div,
+#groupList div,
+button {
+  cursor: pointer;
+}
+
 #servers {
   width:80px;
   background:#111;
   padding:10px;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  align-items:center;
-  overflow-y:auto;
 }
 
-#servers div {
-  width:55px;
-  height:55px;
-  background:#2b2d31;
-  border-radius:12px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-  user-select:none;
-}
-
-#servers div:hover {
-  background:#5865f2;
-}
-
-/* USERS */
 #channels {
   width:220px;
   background:#2b2d31;
   padding:10px;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
 }
 
-#searchUser {
-  padding:8px;
-  margin-bottom:10px;
-  background:#1e1f22;
-  border:none;
-  color:white;
-  outline:none;
-  border-radius:5px;
-}
-
-#panelList {
-  overflow-y:auto;
-  flex:1;
-}
-
-#panelList div {
-  padding:8px;
-  margin-bottom:5px;
-  background:#1e1f22;
-  border-radius:5px;
-  cursor:pointer;
-}
-
-#panelList div:hover {
-  background:#404249;
-}
-
-/* CHAT */
 #chat {
   flex:1;
   display:flex;
   flex-direction:column;
-  overflow:hidden;
-}
-
-#title {
-  padding:10px;
-  background:#2b2d31;
-  border-bottom:1px solid #111;
 }
 
 #messages {
@@ -99,15 +45,9 @@ body {
   padding:10px;
 }
 
-#messages p {
-  margin:5px 0;
-}
-
-/* INPUT */
 #inputArea {
   display:flex;
   padding:10px;
-  background:#2b2d31;
 }
 
 #msg {
@@ -115,23 +55,6 @@ body {
   padding:10px;
   border:none;
   outline:none;
-  background:#1e1f22;
-  color:white;
-  border-radius:6px;
-}
-
-button {
-  margin-left:10px;
-  padding:10px 15px;
-  background:#5865f2;
-  border:none;
-  color:white;
-  border-radius:6px;
-  cursor:pointer;
-}
-
-button:hover {
-  background:#4752c4;
 }
 </style>
 </head>
@@ -166,54 +89,50 @@ const user = localStorage.getItem("user");
 if (!user) location.href = "index.html";
 
 const panelList = document.getElementById("panelList");
-const searchUser = document.getElementById("searchUser");
 const messages = document.getElementById("messages");
 const msgInput = document.getElementById("msg");
 const groupList = document.getElementById("groupList");
 
-let allUsers = [];
 let currentDM = null;
 let currentGroup = null;
+let allUsers = [];
 
-// SAFE FETCH (prevents crash)
+/* ================= SAFE FETCH ================= */
 async function safeFetch(url, options) {
   try {
     const res = await fetch(url, options);
     const text = await res.text();
 
+    // handle 404 / HTML / plain text safely
     try {
       return JSON.parse(text);
     } catch {
-      console.log("NON JSON:", text);
+      console.log("❌ API ERROR:", url, text);
       return null;
     }
-  } catch (e) {
-    console.log("FETCH ERROR:", e);
+  } catch (err) {
+    console.log("❌ NETWORK ERROR:", err);
     return null;
   }
 }
 
-// ENTER SEND
+/* ENTER TO SEND */
 msgInput.addEventListener("keydown", e => {
   if (e.key === "Enter") send();
 });
 
-// USERS
+/* ================= USERS ================= */
 async function loadUsers() {
   const data = await safeFetch(API + "/users");
   if (!data) return;
 
   allUsers = data.map(u => u.username).filter(u => u !== user);
-  renderUsers(allUsers);
-}
-
-function renderUsers(list) {
-  panelList.innerHTML = list.map(u =>
+  panelList.innerHTML = allUsers.map(u =>
     `<div onclick="openDM('${u}')">${u}</div>`
   ).join("");
 }
 
-// DM
+/* ================= DM ================= */
 function openDM(u) {
   currentDM = u;
   currentGroup = null;
@@ -221,11 +140,7 @@ function openDM(u) {
   loadMessages();
 }
 
-function openDMs() {
-  loadUsers();
-}
-
-// GROUP
+/* ================= GROUP ================= */
 async function createGroup() {
   const name = prompt("Group name?");
   if (!name) return;
@@ -240,12 +155,7 @@ async function createGroup() {
 }
 
 async function loadGroups() {
-  const groups = await safeFetch(API + "/group/get", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ user })
-  });
-
+  const groups = await safeFetch(API + "/group/get");
   if (!groups) return;
 
   groupList.innerHTML = groups.map(g =>
@@ -260,7 +170,7 @@ function openGroup(name) {
   loadMessages();
 }
 
-// SEND
+/* ================= SEND ================= */
 async function send() {
   const text = msgInput.value.trim();
   if (!text) return;
@@ -285,16 +195,12 @@ async function send() {
   loadMessages();
 }
 
-// LOAD MESSAGES
+/* ================= MESSAGES ================= */
 async function loadMessages() {
   if (currentDM) {
-    const dms = await safeFetch(API + "/dm/get", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ username:user })
-    });
+    const dms = await safeFetch(API + "/dm/get");
 
-    if (!dms) return;
+    if (!Array.isArray(dms)) return;
 
     messages.innerHTML = dms
       .filter(m =>
@@ -306,13 +212,9 @@ async function loadMessages() {
   }
 
   if (currentGroup) {
-    const msgs = await safeFetch(API + "/group/getMessages", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ group: currentGroup })
-    });
+    const msgs = await safeFetch(API + "/group/getMessages");
 
-    if (!msgs) return;
+    if (!Array.isArray(msgs)) return;
 
     messages.innerHTML = msgs
       .map(m => `<p><b>${m.from}:</b> ${m.text}</p>`)
@@ -320,10 +222,10 @@ async function loadMessages() {
   }
 }
 
-// INIT
-setInterval(loadMessages, 2000);
+/* ================= INIT ================= */
 loadUsers();
 loadGroups();
+setInterval(loadMessages, 3000);
 </script>
 
 </body>
