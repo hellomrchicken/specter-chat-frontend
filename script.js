@@ -1,3 +1,4 @@
+// ONLY ONE API DECLARATION
 const API = "https://specter-chat-api.spectercat78.workers.dev";
 
 const status = document.getElementById("status");
@@ -15,7 +16,7 @@ function set(msg, ok = false) {
   status.innerText = msg;
 }
 
-// MAKE FUNCTIONS GLOBAL (fixes "login not defined")
+// GLOBAL FUNCTIONS (fix onclick issue)
 window.signup = async function () {
   const username = getUser();
   const password = getPass();
@@ -40,7 +41,7 @@ window.signup = async function () {
     } else {
       set(data.error || "Signup failed");
     }
-  } catch (e) {
+  } catch {
     set("Network error");
   }
 };
@@ -74,7 +75,7 @@ window.login = async function () {
     } else {
       set("Invalid username or password");
     }
-  } catch (e) {
+  } catch {
     set("Network error");
   }
 };
