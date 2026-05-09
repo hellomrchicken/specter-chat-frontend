@@ -15,99 +15,66 @@ function set(msg, ok = false) {
   status.innerText = msg;
 }
 
-async function signup() {
+// MAKE FUNCTIONS GLOBAL (fixes "login not defined")
+window.signup = async function () {
   const username = getUser();
   const password = getPass();
 
-  if (!username || !password) return set("Fill all fields");
-
-  const res = await fetch(API + "/signup", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ username, password })
-  });
-
-  const data = await res.json();
-
-  if (data.success) set("Account created!", true);
-  else set(data.error || "Signup failed");
-}
-
-async function login() {
-  const username = getUser();
-  const password = getPass();
-
-  if (!username || !password) return set("Fill all fields");
-
-  const res = await fetch(API + "/login", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ username, password })
-  });
-
-  const data = await res.json();
-
-  if (data.success) {
-    localStorage.setItem("user", username);
-    set("Success!", true);
-    setTimeout(() => location = "chat.html", 500);
-  } else {
-    set("Invalid username or password");
+  if (!username || !password) {
+    return set("Fill all fields");
   }
-}const API = "https://specter-chat-api.spectercat78.workers.dev";
 
-const status = document.getElementById("status");
+  set("Signing up...");
 
-function getUser() {
-  return document.getElementById("username").value.trim();
-}
+  try {
+    const res = await fetch(API + "/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
 
-function getPass() {
-  return document.getElementById("password").value.trim();
-}
+    const data = await res.json();
 
-function set(msg, ok = false) {
-  status.style.color = ok ? "lightgreen" : "red";
-  status.innerText = msg;
-}
-
-async function signup() {
-  const username = getUser();
-  const password = getPass();
-
-  if (!username || !password) return set("Fill all fields");
-
-  const res = await fetch(API + "/signup", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ username, password })
-  });
-
-  const data = await res.json();
-
-  if (data.success) set("Account created!", true);
-  else set(data.error || "Signup failed");
-}
-
-async function login() {
-  const username = getUser();
-  const password = getPass();
-
-  if (!username || !password) return set("Fill all fields");
-
-  const res = await fetch(API + "/login", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ username, password })
-  });
-
-  const data = await res.json();
-
-  if (data.success) {
-    localStorage.setItem("user", username);
-    set("Success!", true);
-    setTimeout(() => location = "chat.html", 500);
-  } else {
-    set("Invalid username or password");
+    if (data.success) {
+      set("Account created!", true);
+    } else {
+      set(data.error || "Signup failed");
+    }
+  } catch (e) {
+    set("Network error");
   }
-}
+};
+
+window.login = async function () {
+  const username = getUser();
+  const password = getPass();
+
+  if (!username || !password) {
+    return set("Fill all fields");
+  }
+
+  set("Logging in...");
+
+  try {
+    const res = await fetch(API + "/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      localStorage.setItem("user", username);
+      set("Success!", true);
+
+      setTimeout(() => {
+        window.location = "chat.html";
+      }, 500);
+    } else {
+      set("Invalid username or password");
+    }
+  } catch (e) {
+    set("Network error");
+  }
+};
