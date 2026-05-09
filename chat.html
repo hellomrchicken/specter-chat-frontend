@@ -13,14 +13,6 @@ body {
   color:white;
 }
 
-/* clickable fix */
-#servers div,
-#panelList div,
-#groupList div,
-button {
-  cursor: pointer;
-}
-
 #servers {
   width:80px;
   background:#111;
@@ -54,6 +46,8 @@ button {
   flex:1;
   padding:10px;
 }
+
+div, button { cursor:pointer; }
 </style>
 </head>
 
@@ -97,21 +91,12 @@ let currentGroup = null;
 async function safeFetch(url, options) {
   try {
     const res = await fetch(url, options);
-    const text = await res.text();
-
-    try {
-      return JSON.parse(text);
-    } catch {
-      console.log("BAD RESPONSE:", text);
-      return null;
-    }
-  } catch (e) {
-    console.log("NETWORK ERROR:", e);
+    return await res.json();
+  } catch {
     return null;
   }
 }
 
-/* FIX: missing function */
 function openDMs() {
   currentDM = null;
   currentGroup = null;
@@ -168,6 +153,11 @@ async function send() {
   const text = msgInput.value.trim();
   if (!text) return;
 
+  if (!currentDM && !currentGroup) {
+    alert("Select a chat first");
+    return;
+  }
+
   if (currentDM) {
     await safeFetch(API + "/dm/send", {
       method:"POST",
@@ -207,9 +197,12 @@ async function loadMessages() {
     if (!msgs) return;
 
     messages.innerHTML = msgs
-      .map(m => `<p><b>${m.from}:</b> ${m.text}</p>`)
+      .filter(m => m.group === currentGroup)
+      .map(m => `<p><b>${m.user}:</b> ${m.text}</p>`)
       .join("");
   }
+
+  messages.scrollTop = messages.scrollHeight;
 }
 
 setInterval(loadMessages, 3000);
